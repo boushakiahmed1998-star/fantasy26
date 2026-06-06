@@ -5,7 +5,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<div>Welcome</div>} />
+        <Route path="/" element={<div className="text-2xl font-bold p-8">Welcome to Fantasy Boulzazen 🏆</div>} />
       </Routes>
     </BrowserRouter>
   )

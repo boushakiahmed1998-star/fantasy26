@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.config import settings
@@ -30,7 +30,6 @@ async def health_check():
 
 
 # ── API v1 router (matches the Vite proxy rewrite: /api → /api/v1) ─────────
-from fastapi import APIRouter
 
 api_router = APIRouter(prefix="/api/v1")
 

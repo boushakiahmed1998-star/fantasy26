@@ -65,6 +65,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   clearError: () => set({ error: null }),
 }))
 
-// Initialise le token axios au chargement de l'app
-const token = localStorage.getItem('fb_token')
-if (token) axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+axios.interceptors.request.use((config) => {
+  const t = localStorage.getItem('fb_token')
+  if (t) config.headers['Authorization'] = `Bearer ${t}`
+  return config
+})

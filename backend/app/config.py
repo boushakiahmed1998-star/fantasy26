@@ -11,14 +11,14 @@ class Settings(BaseSettings):
     SUPABASE_KEY: str = Field(..., env="SUPABASE_KEY")
     SUPABASE_JWT_SECRET: str = Field(..., env="SUPABASE_JWT_SECRET")
 
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 3000
 
     GROQ_API_KEY: str = Field(..., env="GROQ_API_KEY")
     GEMINI_API_KEY: str = Field(..., env="GEMINI_API_KEY")
 
     SOFASCORE_BASE_URL: str = "https://www.sofascore.com/fr"
     OLYMPICS_BASE_URL: str = "https://www.olympics.com/fr"
-    SCRAPER_TIMEOUT: int = 30
+    SCRAPER_TIMEOUT: int = 3000
 
     REDIS_URL: str = "redis://localhost:6379"
 

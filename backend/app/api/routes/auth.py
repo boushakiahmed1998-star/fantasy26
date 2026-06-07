@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
-from app.core.supabase import get_supabase
-from app.core.security import create_access_token
+from core.supabase import get_supabase   # ✅
+from core.security import create_access_token  # ✅
 import logging
 
 router = APIRouter(prefix="/auth", tags=["auth"])

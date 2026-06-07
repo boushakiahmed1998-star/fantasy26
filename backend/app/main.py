@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.config import settings
-from app.api.v1.routes import auth
+from app.api.routes import auth  # ✅
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

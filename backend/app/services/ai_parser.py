@@ -43,9 +43,23 @@ Règles de mapping des postes :
 - Attaquant, Forward, FWD, Ailier, Avant-centre → "FWD"
 - Entraîneur, Coach, Sélectionneur, Manager → "COACH"
 
-Règles pour le prix (en millions d'euros, décimal autorisé ex: 4.5, 7.5) :
-- Si le prix est mentionné explicitement → utilise-le tel quel.
-- Si le prix N'EST PAS mentionné → génère-le automatiquement entre 4 et 12 selon ces critères :
+Règles CRITIQUES pour le prix (en millions, décimal autorisé ex: 4.5, 7.5) :
+
+RÈGLE 1 — PRIORITÉ ABSOLUE : Si un prix est présent dans le texte pour un joueur,
+sous N'IMPORTE quel format, tu DOIS l'extraire et l'utiliser exactement.
+Formats reconnus (exemples de conversion) :
+  "$4.9m"  → 4.9
+  "$3.5m"  → 3.5
+  "$4.4m"  → 4.4
+  "4,9M"   → 4.9
+  "4.9M"   → 4.9
+  "€4.9"   → 4.9
+  "4.9 millions" → 4.9
+  "4,5"    → 4.5
+Ne jamais arrondir ni remplacer un prix explicite par une estimation.
+
+RÈGLE 2 — SEULEMENT si aucun prix n'est mentionné nulle part pour ce joueur,
+génère une estimation entre 4 et 12 selon ces critères :
   * Titulaire indiscutable, star internationale (Mbappé, Ronaldo, Messi niveau) → 10 à 12
   * Titulaire régulier en équipe nationale → 7 à 9
   * Joueur important, souvent titulaire → 5.5 à 7
@@ -76,8 +90,22 @@ Retourne UNIQUEMENT un JSON valide (sans markdown) avec cette structure exacte :
 
 Postes : Gardien→GK, Défenseur→DEF, Milieu→MID, Attaquant→FWD, Entraîneur→COACH.
 
-Règles pour le prix (en millions, décimal autorisé) :
-- Si non précisé, génère entre 4 et 12 selon l'importance du joueur :
+Règles CRITIQUES pour le prix (en millions, décimal autorisé) :
+
+RÈGLE 1 — PRIORITÉ ABSOLUE : Si un prix est visible dans l'image pour un joueur,
+sous N'IMPORTE quel format, tu DOIS l'extraire et l'utiliser exactement.
+Formats reconnus (exemples de conversion) :
+  "$4.9m"  → 4.9
+  "$3.5m"  → 3.5
+  "$4.4m"  → 4.4
+  "4,9M"   → 4.9
+  "4.9M"   → 4.9
+  "€4.9"   → 4.9
+  "4.9 millions" → 4.9
+Ne jamais arrondir ni remplacer un prix explicite par une estimation.
+
+RÈGLE 2 — SEULEMENT si aucun prix n'est mentionné nulle part pour ce joueur,
+génère une estimation entre 4 et 12 selon l'importance du joueur :
   * Star / titulaire indiscutable → 10-12
   * Titulaire régulier → 7-9
   * Joueur important → 5.5-7

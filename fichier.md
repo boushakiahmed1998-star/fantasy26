@@ -1,4 +1,5 @@
-autre choses : 
-- la selection qui est à zero joueurs entraineurs dans son effictifs, on garde la meme couleurs, les equipes qui sont entraint d'etre remplis mais pas encore 26/26 + entraineure la couleurs jaune, et ceux qui sont complets c'est verts.
-- tres important ajoute l'ajout de l'entraineur dans l'effictif.
-- facilite les modifications en ajoutant la possibiliter de selectionner pluseurs joueurs en meme temps 
+rend le tableaux d'enregistrement d'effectif plus facile , au lieu de taper le nom de la selection choisir le groupe en plus et un boutton de suggestion d'equipe qui commeence dans le groupe de  la dernier nation enregistrer .
+
+quand je colle un prompt en mettant entrer c'est envoyer à groq direct.
+
+je veux pouvoir changer de groq vers giminie quand je veux et facilemnet possible

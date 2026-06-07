@@ -57,12 +57,13 @@ class ConfirmImportRequest(BaseModel):
 async def import_players_via_ai(
     text: Optional[str] = Form(None),
     image: Optional[UploadFile] = File(None),
+    provider: Optional[str] = Form("groq"),   # "groq" | "gemini"
     _admin=Depends(require_admin),
 ):
     """
-    Reçoit du texte OU une image.
-    - Image → Gemini Vision (OCR + extraction)
-    - Texte → Groq LLaMA (extraction)
+    Reçoit du texte OU une image + le provider IA choisi.
+    - Image → Gemini Vision (OCR + extraction), fallback Groq Vision
+    - Texte → provider choisi (groq ou gemini), avec fallback automatique
     Retourne { type, data[], warnings[] } pour validation côté front.
     """
     if not text and not image:
@@ -70,6 +71,11 @@ async def import_players_via_ai(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Fournissez du texte ou une image.",
         )
+
+    # Normalise le provider
+    ai_provider = (provider or "groq").lower()
+    if ai_provider not in ("groq", "gemini"):
+        ai_provider = "groq"
 
     try:
         image_bytes = None
@@ -80,7 +86,12 @@ async def import_players_via_ai(
             mime_type = image.content_type or "image/jpeg"
             logger.info(f"Image reçue : {image.filename} ({len(image_bytes)} bytes)")
 
-        raw_result = parse_auto(text=text, image_bytes=image_bytes, mime_type=mime_type)
+        raw_result = parse_auto(
+            text=text,
+            image_bytes=image_bytes,
+            mime_type=mime_type,
+            provider=ai_provider,
+        )
 
         entries = raw_result.get("data", [])
         validated = validate_import_batch(entries)
@@ -88,6 +99,7 @@ async def import_players_via_ai(
         return {
             "type": raw_result.get("type", "mixed"),
             "source_info": raw_result.get("source_info", ""),
+            "_source": raw_result.get("_source", ai_provider),
             "players": validated["players"],
             "coaches": validated["coaches"],
             "warnings": validated["warnings"],
@@ -136,7 +148,6 @@ async def confirm_import(
                 .execute()
             )
             if existing.data:
-                # Joueur déjà enregistré → on ne touche pas à ses données
                 skipped_players += 1
                 continue
 
@@ -230,7 +241,6 @@ async def update_player(
     body: PlayerEntry,
     _admin=Depends(require_admin),
 ):
-    """Met à jour les informations d'un joueur existant."""
     sb = get_supabase()
     sb.table("players").update(
         {
@@ -253,7 +263,6 @@ async def update_coach(
     body: CoachEntry,
     _admin=Depends(require_admin),
 ):
-    """Met à jour les informations d'un entraîneur existant."""
     sb = get_supabase()
     sb.table("coaches").update(
         {

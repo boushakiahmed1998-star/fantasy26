@@ -1,7 +1,7 @@
 """
 Service IA — Extraction de joueurs/entraîneurs depuis texte ou image.
-- Texte → Groq (llama-3.3-70b-versatile), fallback Gemini si quota épuisé
-- Image → Gemini Vision
+- Texte → Groq (llama-3.3-70b-versatile) OU Gemini selon `provider`
+- Image → Gemini Vision (fallback Groq Vision)
 """
 
 import base64
@@ -204,19 +204,34 @@ def _parse_groq_image(image_bytes: bytes, mime_type: str) -> dict:
 
 # ── Dispatcher public ─────────────────────────────────────────────────────────
 
-def parse_from_text(text: str) -> dict:
-    """Groq en premier, bascule sur Gemini si quota épuisé."""
-    try:
-        return _parse_groq(text)
-    except Exception as e:
-        if _is_quota_error(e):
-            logger.warning(f"Groq quota épuisé → bascule Gemini. Erreur: {e}")
+def parse_from_text(text: str, provider: str = "groq") -> dict:
+    """
+    Parse le texte avec le provider choisi.
+    provider: "groq" (défaut) | "gemini"
+    Fallback automatique si quota épuisé.
+    """
+    if provider == "gemini":
+        try:
+            return _parse_gemini_text(text)
+        except Exception as e:
+            logger.warning(f"Gemini failed → bascule Groq. Erreur: {e}")
             try:
-                return _parse_gemini_text(text)
+                return _parse_groq(text)
             except Exception as e2:
-                raise RuntimeError(f"Groq ET Gemini ont échoué : Groq={e} | Gemini={e2}")
-        logger.error(f"Groq API error: {e}")
-        raise RuntimeError(f"Erreur Groq : {e}")
+                raise RuntimeError(f"Gemini ET Groq ont échoué : Gemini={e} | Groq={e2}")
+    else:
+        # Groq en premier, fallback Gemini si quota
+        try:
+            return _parse_groq(text)
+        except Exception as e:
+            if _is_quota_error(e):
+                logger.warning(f"Groq quota épuisé → bascule Gemini. Erreur: {e}")
+                try:
+                    return _parse_gemini_text(text)
+                except Exception as e2:
+                    raise RuntimeError(f"Groq ET Gemini ont échoué : Groq={e} | Gemini={e2}")
+            logger.error(f"Groq API error: {e}")
+            raise RuntimeError(f"Erreur Groq : {e}")
 
 
 def parse_from_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
@@ -231,11 +246,19 @@ def parse_from_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
             raise RuntimeError(f"Gemini ET Groq Vision ont échoué : Gemini={e} | Groq={e2}")
 
 
-def parse_auto(text: str | None = None, image_bytes: bytes | None = None, mime_type: str = "image/jpeg") -> dict:
-    """Dispatcher : image → Gemini Vision (+ fallback Groq), texte → Groq (+ fallback Gemini)."""
+def parse_auto(
+    text: str | None = None,
+    image_bytes: bytes | None = None,
+    mime_type: str = "image/jpeg",
+    provider: str = "groq",
+) -> dict:
+    """
+    Dispatcher : image → Gemini Vision (+ fallback Groq), texte → selon `provider`.
+    provider: "groq" | "gemini"
+    """
     if image_bytes:
         return parse_from_image(image_bytes, mime_type)
     elif text:
-        return parse_from_text(text)
+        return parse_from_text(text, provider=provider)
     else:
         raise ValueError("Fournissez du texte ou une image.")

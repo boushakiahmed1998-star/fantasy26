@@ -52,7 +52,6 @@ function formatPrice(p: number): string {
   return Number.isInteger(p) ? `${p}` : p.toFixed(1)
 }
 
-// Couleur d'effectif: 0 = défaut, en cours = jaune, complet (26+coach) = vert
 type EffectifStatus = 'empty' | 'partial' | 'complete'
 
 function getEffectifStatus(players: number, coaches: number): EffectifStatus {
@@ -65,6 +64,37 @@ const STATUS_COLORS: Record<EffectifStatus, { border: string; bg: string; text: 
   empty:    { border: 'rgba(255,255,255,0.07)', bg: 'rgba(15,45,20,0.6)',    text: '#8a9a8c', dot: '#4a5a4c' },
   partial:  { border: 'rgba(245,158,11,0.45)', bg: 'rgba(245,158,11,0.07)', text: '#f59e0b', dot: '#f59e0b' },
   complete: { border: 'rgba(16,185,129,0.45)', bg: 'rgba(16,185,129,0.07)', text: '#10b981', dot: '#10b981' },
+}
+
+// ── Suggestion équipe suivante ─────────────────────────────────────────────────
+
+/** Trouve la prochaine équipe à remplir à partir du groupe de la dernière nation importée */
+function getSuggestedNextTeam(
+  lastNation: string | null,
+  teamStats: Record<string, { players: number; coaches: number }>
+): string | null {
+  // Trouve le groupe de la dernière nation
+  let startGroup: string | null = null
+  if (lastNation) {
+    for (const [g, equipes] of Object.entries(GROUPES)) {
+      if (equipes.includes(lastNation)) { startGroup = g; break }
+    }
+  }
+
+  const groupOrder = Object.keys(GROUPES) // A, B, C...
+  const startIdx = startGroup ? groupOrder.indexOf(startGroup) : 0
+
+  // Cherche dans le groupe actuel d'abord, puis les suivants (en boucle)
+  for (let offset = 0; offset < groupOrder.length; offset++) {
+    const g = groupOrder[(startIdx + offset) % groupOrder.length]
+    for (const eq of GROUPES[g]) {
+      if (eq === lastNation) continue // sauter la nation déjà faite
+      const st = teamStats[eq] || { players: 0, coaches: 0 }
+      const status = getEffectifStatus(st.players, st.coaches)
+      if (status !== 'complete') return eq
+    }
+  }
+  return null
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -86,6 +116,7 @@ interface PlayerEntry {
 interface ParseResult {
   type: string
   source_info: string
+  _source?: string
   players: PlayerEntry[]
   coaches: PlayerEntry[]
   warnings: string[]
@@ -114,6 +145,7 @@ interface EditForm {
 
 type InputMode = 'text' | 'image' | 'manual'
 type Tab = 'import' | 'players' | 'stats' | 'groupes'
+type AIProvider = 'groq' | 'gemini'
 
 const POSITION_COLORS: Record<string, string> = {
   GK: '#f59e0b', DEF: '#3b82f6', MID: '#10b981', FWD: '#ef4444', COACH: '#8b5cf6',
@@ -147,6 +179,42 @@ function StatusDot({ status }: { status: EffectifStatus }) {
   )
 }
 
+// ── Composant toggle Groq / Gemini ─────────────────────────────────────────────
+
+function AIProviderToggle({
+  provider, onChange
+}: { provider: AIProvider; onChange: (p: AIProvider) => void }) {
+  return (
+    <div style={S.providerToggle}>
+      <span style={{ fontSize: 12, color: '#8a9a8c', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+        Moteur IA :
+      </span>
+      <div style={S.providerButtons}>
+        <button
+          onClick={() => onChange('groq')}
+          title="Groq — LLaMA 3.3 70B (rapide)"
+          style={{
+            ...S.providerBtn,
+            ...(provider === 'groq' ? S.providerBtnGroqActive : S.providerBtnInactive),
+          }}
+        >
+          ⚡ Groq
+        </button>
+        <button
+          onClick={() => onChange('gemini')}
+          title="Gemini 1.5 Flash (Google)"
+          style={{
+            ...S.providerBtn,
+            ...(provider === 'gemini' ? S.providerBtnGeminiActive : S.providerBtnInactive),
+          }}
+        >
+          ✨ Gemini
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Composant principal ────────────────────────────────────────────────────────
 
 export default function Admin() {
@@ -168,6 +236,16 @@ export default function Admin() {
   const [tab, setTab] = useState<Tab>('import')
   const [mode, setMode] = useState<InputMode>('text')
 
+  // ── Provider IA (persisté dans localStorage) ─────────────────────────────
+  const [aiProvider, setAIProvider] = useState<AIProvider>(() => {
+    return (localStorage.getItem('fb_ai_provider') as AIProvider) || 'groq'
+  })
+
+  const handleProviderChange = (p: AIProvider) => {
+    setAIProvider(p)
+    localStorage.setItem('fb_ai_provider', p)
+  }
+
   const [selectedNation, setSelectedNation] = useState<string>('')
   const [nationSearch, setNationSearch] = useState('')
   const [showNationPicker, setShowNationPicker] = useState(false)
@@ -185,11 +263,15 @@ export default function Admin() {
   const [stats, setStats] = useState<any>(null)
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // ── Statistiques par équipe (pour les couleurs d'effectif) ───────────────────
   const [teamStats, setTeamStats] = useState<Record<string, TeamStat>>({})
 
-  // ── États édition joueurs existants ──────────────────────────────────────────
+  // ── Dernière nation importée (pour suggestion) ───────────────────────────
+  const [lastRegisteredNation, setLastRegisteredNation] = useState<string | null>(() => {
+    return localStorage.getItem('fb_last_nation')
+  })
+
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<EditForm>({
     name: '', nationality: '', position: 'FWD', team: '', price: '7', age: '', jersey_number: '',
@@ -197,7 +279,6 @@ export default function Admin() {
   const [saving, setSaving] = useState(false)
   const [editSuccess, setEditSuccess] = useState<string | null>(null)
 
-  // ── Multi-sélection dans l'onglet Joueurs ────────────────────────────────────
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
   const [batchDeleting, setBatchDeleting] = useState(false)
 
@@ -206,14 +287,11 @@ export default function Admin() {
     age: null, jersey_number: null, _selected: true, _type: 'player',
   })
 
-  // ── Chargement des stats d'équipes ───────────────────────────────────────────
   const loadTeamStats = async () => {
     try {
       const { data } = await axios.get('/api/v1/admin/team-stats')
-      // data: { stats: { "France": { players: 22, coaches: 1 }, ... } }
       setTeamStats(data.stats || {})
     } catch {
-      // fallback: calculer depuis la liste joueurs si l'endpoint n'existe pas
       try {
         const { data } = await axios.get('/api/v1/admin/players?limit=9999')
         const acc: Record<string, TeamStat> = {}
@@ -243,6 +321,16 @@ export default function Admin() {
     setManualPlayer(prev => ({ ...prev, nationality: equipe, team: equipe }))
   }
 
+  // ── Suggérer la prochaine équipe incomplète ───────────────────────────────
+  const handleSuggestNextTeam = () => {
+    const suggested = getSuggestedNextTeam(lastRegisteredNation, teamStats)
+    if (suggested) {
+      handleSelectNation(suggested)
+      // Scroll vers la zone d'import si besoin
+      setTimeout(() => textareaRef.current?.focus(), 100)
+    }
+  }
+
   const handleImageDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDragOver(false)
     const file = e.dataTransfer.files[0]
@@ -264,6 +352,9 @@ export default function Admin() {
       } else {
         setError('Fournissez du texte ou une image.'); setLoading(false); return
       }
+      // Envoie le provider choisi
+      formData.append('provider', aiProvider)
+
       const { data } = await axios.post<ParseResult>('/api/v1/admin/import-players', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
@@ -278,6 +369,16 @@ export default function Admin() {
       if (detail?.error === 'RULE_VIOLATION') setError(`⚠ ${detail.message}`)
       else setError(typeof detail === 'string' ? detail : "Erreur lors de l'analyse IA")
     } finally { setLoading(false) }
+  }
+
+  // ── Enter dans le textarea → envoyer directement ──────────────────────────
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (!loading && text.trim() && selectedNation) {
+        handleParse()
+      }
+    }
   }
 
   const handleAddManual = () => {
@@ -301,7 +402,6 @@ export default function Admin() {
 
   const removeEntry = (idx: number) => setEntries(prev => prev.filter((_, i) => i !== idx))
 
-  // Sélection d'un groupe d'entrées dans la table d'import
   const toggleEntrySelected = (idx: number) =>
     updateEntry(idx, '_selected', !entries[idx]._selected)
 
@@ -326,6 +426,11 @@ export default function Admin() {
         (data.skipped_players + data.skipped_coaches > 0 ? ` · ${data.skipped_players + data.skipped_coaches} déjà existant(s) conservé(s)` : '') +
         (data.errors.length ? ` · ⚠ ${data.errors.length} erreur(s)` : '')
       )
+      // Mémorise la dernière nation importée pour la suggestion
+      if (selectedNation) {
+        setLastRegisteredNation(selectedNation)
+        localStorage.setItem('fb_last_nation', selectedNation)
+      }
       setResult(null); setEntries([]); setText(''); setImageFile(null); setImagePreview(null)
       loadTeamStats()
     } catch (e: any) {
@@ -376,7 +481,7 @@ export default function Admin() {
       const url = team ? `/api/v1/admin/players?team=${encodeURIComponent(team)}` : '/api/v1/admin/players'
       const { data } = await axios.get(url)
       setPlayers(data.players)
-      setSelectedPlayerIds(new Set()) // reset sélection
+      setSelectedPlayerIds(new Set())
     } catch {}
   }
 
@@ -397,8 +502,6 @@ export default function Admin() {
     setSelectedPlayerIds(prev => { const n = new Set(prev); n.delete(id); return n })
     loadPlayers(); loadTeamStats()
   }
-
-  // ── Multi-sélection joueurs ───────────────────────────────────────────────────
 
   const toggleSelectPlayer = (id: string) => {
     setSelectedPlayerIds(prev => {
@@ -429,19 +532,18 @@ export default function Admin() {
       await Promise.all([...selectedPlayerIds].map(id => axios.delete(`/api/v1/admin/players/${id}`)))
       setSelectedPlayerIds(new Set())
       loadPlayers(); loadTeamStats()
-    } catch (e: any) {
+    } catch {
       setError('Erreur lors de la suppression groupée')
     } finally { setBatchDeleting(false) }
   }
 
   const selectedNationInfo = TOUTES_EQUIPES.find(e => e.equipe === selectedNation)
-
-  // ── Résumé effectif courant pour la nation sélectionnée ─────────────────────
   const currentNationStat = selectedNation ? getTeamStat(selectedNation) : null
   const currentStatus = currentNationStat
     ? getEffectifStatus(currentNationStat.players, currentNationStat.coaches)
     : 'empty'
 
+  const suggestedTeam = getSuggestedNextTeam(lastRegisteredNation, teamStats)
   const playersSel = entries.filter(e => e._selected)
   const playersSelCount = playersSel.filter(e => e._type === 'player').length
   const coachSelCount = playersSel.filter(e => e._type === 'coach').length
@@ -461,6 +563,8 @@ export default function Admin() {
           <span style={S.tournamentBadge}>🌍 CdM 2026</span>
         </div>
         <div style={S.headerRight}>
+          {/* Toggle IA toujours visible dans le header */}
+          <AIProviderToggle provider={aiProvider} onChange={handleProviderChange} />
           <span style={S.userTag}>👤 {user.username}</span>
           <button onClick={() => navigate('/dashboard')} style={S.btnOutline}>Dashboard</button>
           <button onClick={() => { logout(); navigate('/login') }} style={S.btnOutline}>Déconnexion</button>
@@ -469,8 +573,35 @@ export default function Admin() {
 
       <div style={S.container}>
         <div style={S.titleRow}>
-          <h1 style={S.title}>Panneau d'Administration</h1>
-          <p style={S.subtitle}>Gestion des effectifs · 48 équipes · Coupe du Monde 2026</p>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h1 style={S.title}>Panneau d'Administration</h1>
+              <p style={S.subtitle}>Gestion des effectifs · 48 équipes · Coupe du Monde 2026</p>
+            </div>
+            {/* Bouton Suggérer équipe suivante */}
+            {tab === 'import' && (
+              <button
+                onClick={handleSuggestNextTeam}
+                disabled={!suggestedTeam}
+                title={suggestedTeam ? `Prochaine équipe à remplir : ${suggestedTeam}` : 'Toutes les équipes sont complètes !'}
+                style={{
+                  ...S.btnSuggest,
+                  ...(suggestedTeam ? {} : S.btnDisabled),
+                }}
+              >
+                <span style={{ fontSize: 18 }}>{suggestedTeam ? (FLAG_EMOJIS[suggestedTeam] || '🏳️') : '✅'}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>
+                    {suggestedTeam ? 'Équipe suivante' : 'Toutes complètes'}
+                  </span>
+                  {suggestedTeam && (
+                    <span style={{ fontSize: 11, opacity: 0.8 }}>{suggestedTeam}</span>
+                  )}
+                </div>
+                {suggestedTeam && <span style={{ fontSize: 16 }}>→</span>}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Légende statut ── */}
@@ -483,6 +614,14 @@ export default function Admin() {
               </span>
             </div>
           ))}
+          {lastRegisteredNation && (
+            <div style={S.legendItem}>
+              <span style={{ fontSize: 14 }}>{FLAG_EMOJIS[lastRegisteredNation] || '🏳️'}</span>
+              <span style={{ fontSize: 12, color: '#8a9a8c' }}>
+                Dernier import : <strong style={{ color: '#c9a84c' }}>{lastRegisteredNation}</strong>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* ── Tabs ── */}
@@ -511,7 +650,7 @@ export default function Admin() {
               <div style={S.nationCardHeader}>
                 <span style={S.nationCardTitle}>🌍 Sélectionner la nation</span>
                 {selectedNation && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <StatusDot status={currentStatus} />
                     <span style={{ fontSize: 16, fontWeight: 600, color: '#f5f5f0' }}>
                       {FLAG_EMOJIS[selectedNation] || '🏳️'} {selectedNation}
@@ -615,12 +754,19 @@ export default function Admin() {
                     <h2 style={S.cardTitle}>
                       {FLAG_EMOJIS[selectedNation] || '🏳️'} Effectif — {selectedNation}
                     </h2>
-                    <p style={S.cardSub}>Groq (texte) · Gemini Vision (image) · Manuel · Prix: 4–12 M€</p>
+                    <p style={S.cardSub}>Prix: 4–12 M€ · Shift+Entrée = nouvelle ligne · Entrée = envoyer</p>
                   </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <span style={S.groqTag}>Groq</span>
-                    <span style={S.geminiTag}>Gemini</span>
-                  </div>
+                  {/* Source du dernier résultat */}
+                  {result?._source && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 12, color: '#8a9a8c' }}>Via :</span>
+                      {result._source.includes('groq') ? (
+                        <span style={S.groqTag}>⚡ Groq</span>
+                      ) : (
+                        <span style={S.geminiTag}>✨ Gemini</span>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Mode toggle */}
@@ -636,14 +782,38 @@ export default function Admin() {
                 {/* ── Mode texte ── */}
                 {mode === 'text' && (
                   <div>
-                    <label style={S.label}>Collez l'effectif complet</label>
-                    <textarea value={text} onChange={e => setText(e.target.value)}
+                    <label style={S.label}>
+                      Collez l'effectif complet
+                      <span style={{ color: '#8a9a8c', fontWeight: 400, marginLeft: 8, fontSize: 11 }}>
+                        (Entrée = analyser · Shift+Entrée = nouvelle ligne)
+                      </span>
+                    </label>
+                    <textarea
+                      ref={textareaRef}
+                      value={text}
+                      onChange={e => setText(e.target.value)}
+                      onKeyDown={handleTextareaKeyDown}
                       placeholder={"Gardiens : Raul Rangel\nDéfenseurs : Jorge Sánchez\nMillieux : Edson Álvarez\nAttaquants : Roberto Alvarado\nEntraîneur : Javier Aguirre"}
-                      style={S.textarea} rows={9} />
-                    <button onClick={handleParse} disabled={loading || !text.trim()}
-                      style={{ ...S.btnGold, ...(loading ? S.btnDisabled : {}) }}>
-                      {loading ? '⟳ Analyse...' : `🚀 Analyser → ${selectedNation}`}
-                    </button>
+                      style={S.textarea}
+                      rows={9}
+                    />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <button onClick={handleParse} disabled={loading || !text.trim()}
+                        style={{ ...S.btnGold, ...(loading ? S.btnDisabled : {}) }}>
+                        {loading
+                          ? `⟳ Analyse ${aiProvider === 'groq' ? 'Groq' : 'Gemini'}...`
+                          : `🚀 Analyser → ${selectedNation}`}
+                      </button>
+                      {/* Indicateur provider dans le bouton */}
+                      <span style={{
+                        fontSize: 11, color: aiProvider === 'groq' ? '#f05722' : '#4285f4',
+                        background: aiProvider === 'groq' ? '#f0572215' : '#4285f415',
+                        border: `1px solid ${aiProvider === 'groq' ? '#f0572230' : '#4285f430'}`,
+                        borderRadius: 5, padding: '3px 8px',
+                      }}>
+                        {aiProvider === 'groq' ? '⚡ Groq actif' : '✨ Gemini actif'}
+                      </span>
+                    </div>
                   </div>
                 )}
 
@@ -665,7 +835,7 @@ export default function Admin() {
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
                           <span style={{ fontSize: 40 }}>📸</span>
                           <p style={{ color: '#f5f5f0', fontSize: 14 }}>Glissez une image ou cliquez</p>
-                          <p style={{ color: '#8a9a8c', fontSize: 12 }}>JPG, PNG, WEBP</p>
+                          <p style={{ color: '#8a9a8c', fontSize: 12 }}>JPG, PNG, WEBP — Gemini Vision</p>
                         </div>
                       )}
                     </div>
@@ -674,7 +844,7 @@ export default function Admin() {
                       style={{ display: 'none' }} />
                     <button onClick={handleParse} disabled={loading || !imageFile}
                       style={{ ...S.btnGold, ...(loading ? S.btnDisabled : {}), marginTop: 12 }}>
-                      {loading ? '⟳ Analyse Gemini...' : `🤖 Analyser l'image → ${selectedNation}`}
+                      {loading ? '⟳ Analyse Gemini Vision...' : `🤖 Analyser l'image → ${selectedNation}`}
                     </button>
                   </div>
                 )}
@@ -732,12 +902,6 @@ export default function Admin() {
                       <button onClick={handleAddManual} style={{ ...S.btnGold, marginTop: 0 }}>
                         {manualPlayer.position === 'COACH' ? '🧑‍💼' : '⚽'} Ajouter à {selectedNation}
                       </button>
-                      {manualPlayer.position !== 'COACH' && (
-                        <button onClick={() => setManualPlayer(p => ({ ...p, position: 'COACH', _type: 'coach' }))}
-                          style={{ ...S.btnMini, padding: '8px 14px', color: '#8b5cf6', border: '1px solid #8b5cf644' }}>
-                          + Ajouter entraîneur
-                        </button>
-                      )}
                     </div>
                   </div>
                 )}
@@ -758,7 +922,6 @@ export default function Admin() {
                         {FLAG_EMOJIS[selectedNation]} {selectedNation} — {entries.length} entrée(s)
                         {result && <span style={{ color: '#8a9a8c', fontWeight: 400, fontSize: 13 }}>· {result.source_info}</span>}
                       </h3>
-                      {/* Boutons de sélection rapide */}
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                         <button style={S.btnMini} onClick={() => selectAllEntries(true)}>✓ Tout</button>
                         <button style={S.btnMini} onClick={() => selectAllEntries(false)}>✗ Tout</button>
@@ -781,7 +944,7 @@ export default function Admin() {
                       </div>
                     )}
 
-                    {/* ── Section entraîneur en haut ── */}
+                    {/* Section entraîneur */}
                     {entries.some(e => e._type === 'coach') && (
                       <div style={S.coachSection}>
                         <div style={S.coachSectionTitle}>🧑‍💼 Entraîneur(s)</div>
@@ -809,7 +972,7 @@ export default function Admin() {
                       </div>
                     )}
 
-                    {/* ── Table joueurs ── */}
+                    {/* Table joueurs */}
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
@@ -895,7 +1058,7 @@ export default function Admin() {
         )}
 
         {/* ══════════════════════════════════════════════════
-            TAB : JOUEURS — multi-sélection + édition inline
+            TAB : JOUEURS
         ══════════════════════════════════════════════════ */}
         {tab === 'players' && (
           <div style={S.card}>
@@ -938,7 +1101,7 @@ export default function Admin() {
               </button>
             </div>
 
-            {/* ── Barre multi-sélection ── */}
+            {/* Barre multi-sélection */}
             {players.length > 0 && (
               <div style={S.multiSelectBar}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
@@ -953,8 +1116,6 @@ export default function Admin() {
                       : `Sélectionner tout (${players.length})`}
                   </span>
                 </label>
-
-                {/* Sélection rapide par poste */}
                 <div style={{ display: 'flex', gap: 5 }}>
                   {['GK', 'DEF', 'MID', 'FWD', 'COACH'].map(pos => (
                     <button key={pos} onClick={() => selectByPosition(pos)} style={{
@@ -967,7 +1128,6 @@ export default function Admin() {
                     </button>
                   ))}
                 </div>
-
                 {selectedPlayerIds.size > 0 && (
                   <button onClick={batchDelete} disabled={batchDeleting}
                     style={{ ...S.btnDeleteBatch, ...(batchDeleting ? S.btnDisabled : {}) }}>
@@ -996,7 +1156,6 @@ export default function Admin() {
                   <tbody>
                     {players.map(p => (
                       <React.Fragment key={p.id}>
-                        {/* ── Ligne normale ── */}
                         {editingId !== p.id && (
                           <tr style={{
                             borderBottom: '1px solid rgba(255,255,255,0.04)',
@@ -1024,8 +1183,6 @@ export default function Admin() {
                             </td>
                           </tr>
                         )}
-
-                        {/* ── Ligne édition ── */}
                         {editingId === p.id && (
                           <tr style={{ background: 'rgba(201,168,76,0.06)', borderBottom: '2px solid rgba(201,168,76,0.25)' }}>
                             <td colSpan={7} style={{ padding: '12px 10px' }}>
@@ -1135,7 +1292,7 @@ export default function Admin() {
         )}
 
         {/* ══════════════════════════════════════════════════
-            TAB : GROUPES — avec statut couleur effectif
+            TAB : GROUPES
         ══════════════════════════════════════════════════ */}
         {tab === 'groupes' && (
           <div>
@@ -1185,11 +1342,8 @@ export default function Admin() {
                         <span style={{ color: '#8a9a8c', fontSize: 12, width: 20 }}>{i + 1}.</span>
                         <span style={{ fontSize: 20 }}>{FLAG_EMOJIS[eq] || '🏳️'}</span>
                         <span style={{ fontSize: 13, flex: 1 }}>{eq}</span>
-                        {/* Compteur */}
                         <span style={{ fontSize: 11, color: c.text, minWidth: 60, textAlign: 'center' }}>
-                          {status === 'empty'
-                            ? '—'
-                            : `${st.players}/26 ${st.coaches ? '+ 🧑‍💼' : ''}`}
+                          {status === 'empty' ? '—' : `${st.players}/26 ${st.coaches ? '+ 🧑‍💼' : ''}`}
                         </span>
                         <StatusDot status={status} />
                         <button onClick={() => { setTab('import'); handleSelectNation(eq) }}
@@ -1215,19 +1369,37 @@ const S: Record<string, React.CSSProperties> = {
   bg: { minHeight: '100vh', background: '#0a1f0e', color: '#f5f5f0', fontFamily: "'DM Sans', sans-serif" },
   centered: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a1f0e' },
   errorBox: { background: 'rgba(15,45,20,0.9)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 16, padding: '2rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: 16, alignItems: 'center' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,45,20,0.95)', backdropFilter: 'blur(8px)', position: 'sticky', top: 0, zIndex: 100 },
+  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 2rem', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'rgba(15,45,20,0.95)', backdropFilter: 'blur(8px)', position: 'sticky', top: 0, zIndex: 100, flexWrap: 'wrap', gap: 8 },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 10 },
   logo: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.3rem', color: '#c9a84c', letterSpacing: '0.05em' },
   adminBadge: { background: '#c9a84c22', color: '#c9a84c', border: '1px solid #c9a84c44', borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em' },
   tournamentBadge: { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 4, padding: '2px 8px', fontSize: 11, color: '#8a9a8c' },
-  headerRight: { display: 'flex', alignItems: 'center', gap: 10 },
+  headerRight: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
   userTag: { fontSize: 13, color: '#8a9a8c' },
   btnOutline: { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '6px 14px', color: '#8a9a8c', fontSize: 12, cursor: 'pointer' },
+
+  // ── Provider toggle ─────────────────────────────────────────────────────────
+  providerToggle: { display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(0,0,0,0.25)', borderRadius: 8, padding: '4px 10px', border: '1px solid rgba(255,255,255,0.08)' },
+  providerButtons: { display: 'flex', gap: 3 },
+  providerBtn: { border: 'none', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', letterSpacing: '0.03em' },
+  providerBtnGroqActive: { background: '#f05722', color: '#fff', boxShadow: '0 0 12px #f0572255' },
+  providerBtnGeminiActive: { background: '#4285f4', color: '#fff', boxShadow: '0 0 12px #4285f455' },
+  providerBtnInactive: { background: 'rgba(255,255,255,0.06)', color: '#8a9a8c' },
+
+  // ── Suggest button ───────────────────────────────────────────────────────────
+  btnSuggest: {
+    display: 'flex', alignItems: 'center', gap: 10,
+    background: 'linear-gradient(135deg, rgba(201,168,76,0.15), rgba(201,168,76,0.08))',
+    border: '1px solid rgba(201,168,76,0.4)',
+    borderRadius: 10, padding: '10px 16px', cursor: 'pointer', color: '#c9a84c',
+    transition: 'all 0.2s',
+  },
+
   container: { maxWidth: 1200, margin: '0 auto', padding: '2rem 1.5rem' },
   titleRow: { marginBottom: '1rem' },
   title: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '2rem', color: '#f5f5f0', letterSpacing: '0.04em', marginBottom: 4 },
   subtitle: { color: '#8a9a8c', fontSize: 14 },
-  legendBar: { display: 'flex', gap: 20, marginBottom: 16, padding: '8px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, flexWrap: 'wrap' },
+  legendBar: { display: 'flex', gap: 20, marginBottom: 16, padding: '8px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, flexWrap: 'wrap', alignItems: 'center' },
   legendItem: { display: 'flex', alignItems: 'center', gap: 7 },
   tabs: { display: 'flex', gap: 4, marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)' },
   tabBtn: { background: 'transparent', border: 'none', color: '#8a9a8c', padding: '10px 20px', fontSize: 14, cursor: 'pointer', borderBottom: '2px solid transparent', transition: 'all 0.2s', borderRadius: '6px 6px 0 0' },

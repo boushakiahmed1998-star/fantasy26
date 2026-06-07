@@ -1,11 +1,14 @@
 """
 Routes Admin — Panneau d'administration Fantasy Boulzazen.
 Endpoints :
-  POST /api/v1/admin/import-players  → IA parse texte ou image → JSON
-  POST /api/v1/admin/confirm-import  → valide et insère en BDD
-  GET  /api/v1/admin/players         → liste tous les joueurs
-  GET  /api/v1/admin/coaches         → liste tous les entraîneurs
-  DELETE /api/v1/admin/players/{id}  → supprime un joueur
+  POST   /api/v1/admin/import-players   → IA parse texte ou image → JSON
+  POST   /api/v1/admin/confirm-import   → valide et insère en BDD
+  GET    /api/v1/admin/players          → liste tous les joueurs
+  GET    /api/v1/admin/coaches          → liste tous les entraîneurs
+  PUT    /api/v1/admin/players/{id}     → modifie un joueur existant
+  PUT    /api/v1/admin/coaches/{id}     → modifie un entraîneur existant
+  DELETE /api/v1/admin/players/{id}     → supprime un joueur
+  DELETE /api/v1/admin/coaches/{id}     → supprime un entraîneur
 """
 
 import logging
@@ -30,7 +33,7 @@ class PlayerEntry(BaseModel):
     nationality: str
     position: str  # GK | DEF | MID | FWD
     team: str
-    price: int
+    price: float   # float pour accepter 4.5, 7.5, etc.
     age: Optional[int] = None
     jersey_number: Optional[int] = None
 
@@ -39,7 +42,7 @@ class CoachEntry(BaseModel):
     name: str
     nationality: str
     team: str
-    price: int
+    price: float   # float pour accepter 4.5, 7.5, etc.
     age: Optional[int] = None
 
 
@@ -79,7 +82,6 @@ async def import_players_via_ai(
 
         raw_result = parse_auto(text=text, image_bytes=image_bytes, mime_type=mime_type)
 
-        # Validation des règles métier sur le lot
         entries = raw_result.get("data", [])
         validated = validate_import_batch(entries)
 
@@ -113,17 +115,32 @@ async def confirm_import(
 ):
     """
     Insère les joueurs et entraîneurs validés dans Supabase.
-    Gère les doublons via upsert sur (name, nationality).
+    - Si un joueur avec le même (name, nationality) existe déjà → on le conserve (pas d'écrasement).
+    - Sinon → insertion.
     """
     sb = get_supabase()
     inserted_players = 0
     inserted_coaches = 0
+    skipped_players = 0
+    skipped_coaches = 0
     errors = []
 
-    # Insérer les joueurs
+    # ── Joueurs ──────────────────────────────────────────────────────────────
     for p in body.players:
         try:
-            sb.table("players").upsert(
+            existing = (
+                sb.table("players")
+                .select("id")
+                .eq("name", p.name)
+                .eq("nationality", p.nationality)
+                .execute()
+            )
+            if existing.data:
+                # Joueur déjà enregistré → on ne touche pas à ses données
+                skipped_players += 1
+                continue
+
+            sb.table("players").insert(
                 {
                     "name": p.name,
                     "nationality": p.nationality,
@@ -131,28 +148,39 @@ async def confirm_import(
                     "team": p.team,
                     "price": p.price,
                     "stats": {"age": p.age, "jersey_number": p.jersey_number},
-                },
-                on_conflict="name,nationality",
+                }
             ).execute()
             inserted_players += 1
+
         except Exception as e:
             logger.error(f"Error inserting player {p.name}: {e}")
             errors.append(f"Joueur {p.name}: {str(e)[:100]}")
 
-    # Insérer les entraîneurs
+    # ── Entraîneurs ───────────────────────────────────────────────────────────
     for c in body.coaches:
         try:
-            sb.table("coaches").upsert(
+            existing = (
+                sb.table("coaches")
+                .select("id")
+                .eq("name", c.name)
+                .eq("nationality", c.nationality)
+                .execute()
+            )
+            if existing.data:
+                skipped_coaches += 1
+                continue
+
+            sb.table("coaches").insert(
                 {
                     "name": c.name,
                     "nationality": c.nationality,
                     "team": c.team,
                     "price": c.price,
                     "forbidden_players_nationality": [c.nationality],
-                },
-                on_conflict="name,nationality",
+                }
             ).execute()
             inserted_coaches += 1
+
         except Exception as e:
             logger.error(f"Error inserting coach {c.name}: {e}")
             errors.append(f"Entraîneur {c.name}: {str(e)[:100]}")
@@ -161,6 +189,8 @@ async def confirm_import(
         "success": True,
         "inserted_players": inserted_players,
         "inserted_coaches": inserted_coaches,
+        "skipped_players": skipped_players,
+        "skipped_coaches": skipped_coaches,
         "errors": errors,
     }
 
@@ -192,7 +222,51 @@ async def list_coaches(_admin=Depends(require_admin)):
     return {"coaches": result.data, "total": len(result.data)}
 
 
-# ── Endpoint 5 : Supprimer un joueur ──────────────────────────────────────────
+# ── Endpoint 5 : Modifier un joueur ───────────────────────────────────────────
+
+@router.put("/players/{player_id}")
+async def update_player(
+    player_id: str,
+    body: PlayerEntry,
+    _admin=Depends(require_admin),
+):
+    """Met à jour les informations d'un joueur existant."""
+    sb = get_supabase()
+    sb.table("players").update(
+        {
+            "name": body.name,
+            "nationality": body.nationality,
+            "position": body.position,
+            "team": body.team,
+            "price": body.price,
+            "stats": {"age": body.age, "jersey_number": body.jersey_number},
+        }
+    ).eq("id", player_id).execute()
+    return {"success": True}
+
+
+# ── Endpoint 6 : Modifier un entraîneur ───────────────────────────────────────
+
+@router.put("/coaches/{coach_id}")
+async def update_coach(
+    coach_id: str,
+    body: CoachEntry,
+    _admin=Depends(require_admin),
+):
+    """Met à jour les informations d'un entraîneur existant."""
+    sb = get_supabase()
+    sb.table("coaches").update(
+        {
+            "name": body.name,
+            "nationality": body.nationality,
+            "team": body.team,
+            "price": body.price,
+        }
+    ).eq("id", coach_id).execute()
+    return {"success": True}
+
+
+# ── Endpoint 7 : Supprimer un joueur ──────────────────────────────────────────
 
 @router.delete("/players/{player_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_player(player_id: str, _admin=Depends(require_admin)):
@@ -200,7 +274,7 @@ async def delete_player(player_id: str, _admin=Depends(require_admin)):
     sb.table("players").delete().eq("id", player_id).execute()
 
 
-# ── Endpoint 6 : Supprimer un entraîneur ──────────────────────────────────────
+# ── Endpoint 8 : Supprimer un entraîneur ──────────────────────────────────────
 
 @router.delete("/coaches/{coach_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_coach(coach_id: str, _admin=Depends(require_admin)):
@@ -208,7 +282,7 @@ async def delete_coach(coach_id: str, _admin=Depends(require_admin)):
     sb.table("coaches").delete().eq("id", coach_id).execute()
 
 
-# ── Endpoint 7 : Stats rapides ────────────────────────────────────────────────
+# ── Endpoint 9 : Stats rapides ────────────────────────────────────────────────
 
 @router.get("/stats")
 async def admin_stats(_admin=Depends(require_admin)):

@@ -28,7 +28,7 @@ UNIQUEMENT un objet JSON valide (sans balises markdown ni texte avant/après) av
       "nationality": "Pays (en français, ex: France, Espagne, Brésil)",
       "position": "GK" | "DEF" | "MID" | "FWD" | "COACH",
       "team": "Nom équipe nationale (en français)",
-      "price": <entier en millions, ex: 8>,
+      "price": <nombre décimal en millions, ex: 8.5>,
       "age": <entier ou null>,
       "jersey_number": <entier ou null>
     }
@@ -43,7 +43,16 @@ Règles de mapping des postes :
 - Attaquant, Forward, FWD, Ailier, Avant-centre → "FWD"
 - Entraîneur, Coach, Sélectionneur, Manager → "COACH"
 
-Si le prix n'est pas mentionné, estime-le selon le calibre du joueur (entre 4 et 15M).
+Règles pour le prix (en millions d'euros, décimal autorisé ex: 4.5, 7.5) :
+- Si le prix est mentionné explicitement → utilise-le tel quel.
+- Si le prix N'EST PAS mentionné → génère-le automatiquement entre 4 et 12 selon ces critères :
+  * Titulaire indiscutable, star internationale (Mbappé, Ronaldo, Messi niveau) → 10 à 12
+  * Titulaire régulier en équipe nationale → 7 à 9
+  * Joueur important, souvent titulaire → 5.5 à 7
+  * Remplaçant, joueur de rotation → 4 à 5.5
+  * Entraîneur → 5 à 8 selon son palmarès
+  Les prix peuvent être décimaux : 4.5, 6.5, 8.5, 10.5, etc.
+
 Retourne SEULEMENT le JSON, rien d'autre."""
 
 VISION_PROMPT = """Analyse cette image sportive et extrais tous les joueurs et entraîneurs visibles.
@@ -57,7 +66,7 @@ Retourne UNIQUEMENT un JSON valide (sans markdown) avec cette structure exacte :
       "nationality": "Pays",
       "position": "GK" | "DEF" | "MID" | "FWD" | "COACH",
       "team": "Équipe nationale",
-      "price": <entier en millions>,
+      "price": <nombre décimal en millions, ex: 7.5>,
       "age": <entier ou null>,
       "jersey_number": <entier ou null>
     }
@@ -66,7 +75,16 @@ Retourne UNIQUEMENT un JSON valide (sans markdown) avec cette structure exacte :
 }
 
 Postes : Gardien→GK, Défenseur→DEF, Milieu→MID, Attaquant→FWD, Entraîneur→COACH.
-Prix estimé entre 4-15M si non précisé. Retourne SEULEMENT le JSON."""
+
+Règles pour le prix (en millions, décimal autorisé) :
+- Si non précisé, génère entre 4 et 12 selon l'importance du joueur :
+  * Star / titulaire indiscutable → 10-12
+  * Titulaire régulier → 7-9
+  * Joueur important → 5.5-7
+  * Remplaçant / rotation → 4-5.5
+  Les prix peuvent être décimaux : 4.5, 6.5, 8.5, etc.
+
+Retourne SEULEMENT le JSON."""
 
 
 def _clean_json_response(raw: str) -> str:

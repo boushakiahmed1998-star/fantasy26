@@ -34,11 +34,11 @@ def validate_import_batch(entries: list[dict]) -> dict:
     coaches = [e for e in entries if e.get("position") == "COACH"]
     warnings = []
 
-    # 1. Prix valides
+    # 1. Prix valides (accepte float, ex: 4.5)
     for p in players + coaches:
         price = p.get("price")
         if price is None or not isinstance(price, (int, float)) or price < 0:
-            p["price"] = 5  # prix par défaut
+            p["price"] = 5.0  # prix par défaut
             warnings.append(f"Prix manquant pour {p['name']} → défaut 5M")
 
     # 2. Nationalité présente
@@ -83,11 +83,9 @@ def validate_fantasy_team(
 
     Retourne { "valid": True, "budget_used": X } ou lève RuleViolation.
     """
-    # Construire les lookups
     players_by_id = {str(p["id"]): p for p in all_players}
     coaches_by_id = {str(c["id"]): c for c in all_coaches}
 
-    # Résoudre les joueurs sélectionnés
     selected = []
     for pid in player_ids:
         p = players_by_id.get(str(pid))
@@ -104,15 +102,15 @@ def validate_fantasy_team(
         )
 
     # Règle 2 : Budget ≤ 100M
-    budget_used = sum(p.get("price", 0) for p in selected)
+    budget_used = sum(float(p.get("price", 0)) for p in selected)
     if coach_id:
         coach = coaches_by_id.get(str(coach_id))
         if coach:
-            budget_used += coach.get("price", 0)
+            budget_used += float(coach.get("price", 0))
     if budget_used > 100:
         raise RuleViolation(
             "BUDGET_EXCEEDED",
-            f"Budget dépassé : {budget_used}M > 100M",
+            f"Budget dépassé : {budget_used:.1f}M > 100M",
             {"budget_used": budget_used, "limit": 100},
         )
 
@@ -144,7 +142,7 @@ def validate_fantasy_team(
                 {"coach_nationality": coach_nat},
             )
 
-    return {"valid": True, "budget_used": budget_used}
+    return {"valid": True, "budget_used": round(budget_used, 1)}
 
 
 def validate_single_player(player: dict, existing_team_players: list[dict]) -> dict:

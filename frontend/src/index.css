@@ -1,3 +1,271 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --green-dark: #0a1f0e;
+  --green-mid: #0f2d14;
+  --green-pitch: #1a4a20;
+  --gold: #c9a84c;
+  --gold-light: #e8c76a;
+  --white: #f5f5f0;
+  --muted: #8a9a8c;
+  --error: #e05252;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--green-dark);
+  color: var(--white);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── AUTH ─────────────────────────────────────────────────────────── */
+.auth-bg {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 60px,
+      rgba(255,255,255,0.015) 60px,
+      rgba(255,255,255,0.015) 61px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 60px,
+      rgba(255,255,255,0.015) 60px,
+      rgba(255,255,255,0.015) 61px
+    ),
+    radial-gradient(ellipse at 50% 0%, #1a4a20 0%, #0a1f0e 60%);
+  padding: 2rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  background: rgba(15, 45, 20, 0.85);
+  border: 0.5px solid rgba(201, 168, 76, 0.3);
+  border-radius: 16px;
+  padding: 2.5rem 2rem;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 0 60px rgba(0,0,0,0.5), inset 0 0 0 0.5px rgba(201,168,76,0.1);
+}
+
+.auth-logo {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.logo-trophy {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.logo-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.8rem;
+  letter-spacing: 0.05em;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.logo-sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 4px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.auth-form { display: flex; flex-direction: column; gap: 1rem; }
+
+.form-title {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.4rem;
+  color: var(--white);
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.auth-error {
+  background: rgba(224, 82, 82, 0.15);
+  border: 0.5px solid rgba(224, 82, 82, 0.4);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #f08080;
+  cursor: pointer;
+}
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+
+.field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.field input {
+  background: rgba(255,255,255,0.05);
+  border: 0.5px solid rgba(255,255,255,0.15);
+  border-radius: 8px;
+  padding: 11px 14px;
+  color: var(--white);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.field input::placeholder { color: rgba(255,255,255,0.25); }
+
+.field input:focus {
+  border-color: rgba(201, 168, 76, 0.6);
+  background: rgba(255,255,255,0.07);
+}
+
+.btn-primary {
+  margin-top: 0.5rem;
+  background: var(--gold);
+  color: #0a1f0e;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.1em;
+  border: none;
+  border-radius: 8px;
+  padding: 13px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  font-weight: 400;
+}
+
+.btn-primary:hover { background: var(--gold-light); }
+.btn-primary:active { transform: scale(0.98); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.auth-switch {
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.auth-switch a {
+  color: var(--gold);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.auth-switch a:hover { color: var(--gold-light); }
+
+/* ── DASHBOARD ────────────────────────────────────────────────────── */
+.dashboard-bg {
+  min-height: 100vh;
+  background: var(--green-dark);
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  border-bottom: 0.5px solid rgba(255,255,255,0.08);
+  background: rgba(15, 45, 20, 0.9);
+  backdrop-filter: blur(8px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.dash-logo {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.3rem;
+  color: var(--gold);
+  letter-spacing: 0.05em;
+}
+
+.dash-user {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.btn-logout {
+  background: rgba(255,255,255,0.06);
+  border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: 6px;
+  padding: 6px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-logout:hover { background: rgba(255,255,255,0.1); color: var(--white); }
+
+.dashboard-content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+
+.dashboard-content h1 {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2.2rem;
+  color: var(--white);
+  letter-spacing: 0.04em;
+  margin-bottom: 0.5rem;
+}
+
+.dash-sub {
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 2.5rem;
+}
+
+.dash-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.dash-card {
+  background: rgba(15, 45, 20, 0.7);
+  border: 0.5px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.dash-card:hover { border-color: rgba(201, 168, 76, 0.3); }
+
+.dash-card-icon { font-size: 1.8rem; margin-bottom: 0.75rem; }
+
+.dash-card-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin-bottom: 0.5rem;
+}
+
+.dash-card-value {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 2rem;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+}

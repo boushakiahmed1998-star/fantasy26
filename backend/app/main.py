@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.config import settings
+from app.api.v1.routes import auth
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,28 +23,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Health check ─────────────────────────────────────────────────────────────
+# ── Health check ──────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "version": settings.APP_VERSION}
 
-# ── API v1 router ─────────────────────────────────────────────────────────────
-# Convention : le frontend appelle toujours /api/X (jamais /api/v1/X)
-# Le proxy Vite se charge de réécrire /api/X → /api/v1/X côté backend.
+# ── API v1 ────────────────────────────────────────────────────────────────────
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(auth.router)
 
-@api_router.get("/ping")
-async def ping():
-    return {"message": "pong"}
-
-# Ajouter les routes ici :
-# from app.api.v1.routes import auth, players, matches
-# api_router.include_router(auth.router,    prefix="/auth",    tags=["auth"])
-# api_router.include_router(players.router, prefix="/players", tags=["players"])
-# api_router.include_router(matches.router, prefix="/matches", tags=["matches"])
+# Prochaines phases :
+# from app.api.v1.routes import players, fantasy, admin, pronos, matches
+# api_router.include_router(players.router)
+# api_router.include_router(fantasy.router)
+# api_router.include_router(admin.router)
 
 app.include_router(api_router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=settings.DEBUG)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=settings.DEBUG)

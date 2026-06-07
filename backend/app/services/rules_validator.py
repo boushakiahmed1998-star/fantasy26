@@ -1,18 +1,12 @@
 """
 Validateur de règles métier avant insertion en base.
-Vérifie les contraintes Fantasy League :
-  - Budget global ≤ 100M
-  - Max 3 joueurs par nationalité
-  - L'entraîneur ne partage pas la nationalité de ses joueurs
 """
 
 from __future__ import annotations
 from typing import Any
 
-# ── Types internes ─────────────────────────────────────────────────────────────
 
 class RuleViolation(Exception):
-    """Exception levée lors d'une violation de règle métier."""
     def __init__(self, code: str, message: str, details: dict | None = None):
         self.code = code
         self.message = message
@@ -20,26 +14,46 @@ class RuleViolation(Exception):
         super().__init__(message)
 
 
-# ── Validation d'un import (texte ou image → liste d'entrées) ─────────────────
+def _parse_price(value) -> float | None:
+    """
+    Convertit une valeur de prix en float.
+    Accepte : 4.5, 4,5, "4,5 M", "7.5M", 8, etc.
+    Retourne None si invalide.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.replace(',', '.').replace('M', '').replace('m', '').strip()
+        try:
+            return float(cleaned)
+        except ValueError:
+            return None
+    return None
+
 
 def validate_import_batch(entries: list[dict]) -> dict:
-    """
-    Valide un lot d'entrées parsées par l'IA avant insertion.
-
-    Retourne :
-      { "valid": True, "players": [...], "coaches": [...], "warnings": [...] }
-    Lève RuleViolation si une règle dure est enfreinte.
-    """
     players = [e for e in entries if e.get("position") in ("GK", "DEF", "MID", "FWD")]
     coaches = [e for e in entries if e.get("position") == "COACH"]
     warnings = []
 
-    # 1. Prix valides (accepte float, ex: 4.5)
+    # 1. Prix valides — accepte virgule et float (ex: 4,5 → 4.5)
     for p in players + coaches:
-        price = p.get("price")
-        if price is None or not isinstance(price, (int, float)) or price < 0:
-            p["price"] = 5.0  # prix par défaut
-            warnings.append(f"Prix manquant pour {p['name']} → défaut 5M")
+        price = _parse_price(p.get("price"))
+        if price is None or price < 0:
+            p["price"] = 5.0
+            warnings.append(f"Prix manquant/invalide pour {p.get('name', '?')} → défaut 5M")
+        elif price < 4:
+            # Prix minimum 4 selon les règles de génération
+            p["price"] = 4.0
+            warnings.append(f"Prix trop bas pour {p.get('name', '?')} → ajusté à 4M")
+        elif price > 12:
+            # Prix max 12 selon les règles de génération
+            p["price"] = 12.0
+            warnings.append(f"Prix trop élevé pour {p.get('name', '?')} → plafonné à 12M")
+        else:
+            p["price"] = round(price, 1)
 
     # 2. Nationalité présente
     for entry in players + coaches:
@@ -72,17 +86,6 @@ def validate_fantasy_team(
     all_players: list[dict],
     all_coaches: list[dict],
 ) -> dict:
-    """
-    Valide la composition complète d'une équipe Fantasy.
-
-    Règles :
-      - 15 joueurs exactement
-      - Budget total ≤ 100M
-      - Max 3 joueurs par nationalité
-      - L'entraîneur ne peut avoir aucun joueur de sa nationalité
-
-    Retourne { "valid": True, "budget_used": X } ou lève RuleViolation.
-    """
     players_by_id = {str(p["id"]): p for p in all_players}
     coaches_by_id = {str(c["id"]): c for c in all_coaches}
 
@@ -93,7 +96,6 @@ def validate_fantasy_team(
             raise RuleViolation("PLAYER_NOT_FOUND", f"Joueur introuvable : {pid}")
         selected.append(p)
 
-    # Règle 1 : 15 joueurs exactement
     if len(selected) != 15:
         raise RuleViolation(
             "WRONG_SQUAD_SIZE",
@@ -101,7 +103,6 @@ def validate_fantasy_team(
             {"count": len(selected)},
         )
 
-    # Règle 2 : Budget ≤ 100M
     budget_used = sum(float(p.get("price", 0)) for p in selected)
     if coach_id:
         coach = coaches_by_id.get(str(coach_id))
@@ -114,7 +115,6 @@ def validate_fantasy_team(
             {"budget_used": budget_used, "limit": 100},
         )
 
-    # Règle 3 : Max 3 joueurs par nationalité
     nat_count: dict[str, int] = {}
     for p in selected:
         nat = p.get("nationality", "")
@@ -128,7 +128,6 @@ def validate_fantasy_team(
             {"violations": violations},
         )
 
-    # Règle 4 : Entraîneur ≠ nationalité des joueurs
     if coach_id:
         coach = coaches_by_id.get(str(coach_id))
         if not coach:
@@ -146,10 +145,6 @@ def validate_fantasy_team(
 
 
 def validate_single_player(player: dict, existing_team_players: list[dict]) -> dict:
-    """
-    Valide l'ajout d'un seul joueur à une équipe en cours de construction.
-    Vérifie uniquement la limite par nationalité (3 max).
-    """
     player_nat = player.get("nationality", "")
     count = sum(
         1 for p in existing_team_players if p.get("nationality") == player_nat

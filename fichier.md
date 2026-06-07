@@ -1,5 +1,4 @@
-fais quelques ajustements :
-- le prix du joueur peut etre avec vergule , exemple 4,5 M
-- je peux modifier les information des joueurs / entraineur deja enregistrer.
-- si il y a un joueurs deja enregistrer avec le meme nom et la meme nation on garde que le joueurs dejà enregistrer.
-- si le prix n'est pas ndiquer, les prix des jouers sont generer automatiquement, et ils  commencent de 4 jusqu'à 12 d'apres l'importence du joueur dans l'equipe et son efficaciter .
+autre choses : 
+- la selection qui est à zero joueurs entraineurs dans son effictifs, on garde la meme couleurs, les equipes qui sont entraint d'etre remplis mais pas encore 26/26 + entraineure la couleurs jaune, et ceux qui sont complets c'est verts.
+- tres important ajoute l'ajout de l'entraineur dans l'effictif.
+- facilite les modifications en ajoutant la possibiliter de selectionner pluseurs joueurs en meme temps 

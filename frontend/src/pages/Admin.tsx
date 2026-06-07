@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuthStore } from '../store/authStore'
@@ -39,7 +39,37 @@ const FLAG_EMOJIS: Record<string, string> = {
   'Angleterre': '🏴󠁧󠁢󠁥󠁮󠁧󠁿', 'Croatie': '🇭🇷', 'Ghana': '🇬🇭', 'Panama': '🇵🇦',
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+function parsePrice(val: string | number): number {
+  if (typeof val === 'number') return val
+  const cleaned = String(val).replace(',', '.').replace(/[^0-9.]/g, '')
+  const n = parseFloat(cleaned)
+  return isNaN(n) ? 5 : Math.min(12, Math.max(4, n))
+}
+
+function formatPrice(p: number): string {
+  return Number.isInteger(p) ? `${p}` : p.toFixed(1)
+}
+
+// Couleur d'effectif: 0 = défaut, en cours = jaune, complet (26+coach) = vert
+type EffectifStatus = 'empty' | 'partial' | 'complete'
+
+function getEffectifStatus(players: number, coaches: number): EffectifStatus {
+  if (players === 0 && coaches === 0) return 'empty'
+  if (players >= 26 && coaches >= 1) return 'complete'
+  return 'partial'
+}
+
+const STATUS_COLORS: Record<EffectifStatus, { border: string; bg: string; text: string; dot: string }> = {
+  empty:    { border: 'rgba(255,255,255,0.07)', bg: 'rgba(15,45,20,0.6)',    text: '#8a9a8c', dot: '#4a5a4c' },
+  partial:  { border: 'rgba(245,158,11,0.45)', bg: 'rgba(245,158,11,0.07)', text: '#f59e0b', dot: '#f59e0b' },
+  complete: { border: 'rgba(16,185,129,0.45)', bg: 'rgba(16,185,129,0.07)', text: '#10b981', dot: '#10b981' },
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
+
+interface TeamStat { players: number; coaches: number }
 
 interface PlayerEntry {
   name: string
@@ -51,7 +81,6 @@ interface PlayerEntry {
   jersey_number?: number | null
   _selected?: boolean
   _type?: 'player' | 'coach'
-  _editing?: boolean
 }
 
 interface ParseResult {
@@ -61,6 +90,26 @@ interface ParseResult {
   coaches: PlayerEntry[]
   warnings: string[]
   total: number
+}
+
+interface ExistingPlayer {
+  id: string
+  name: string
+  nationality: string
+  position: string
+  team: string
+  price: number
+  stats?: { age?: number; jersey_number?: number }
+}
+
+interface EditForm {
+  name: string
+  nationality: string
+  position: string
+  team: string
+  price: string
+  age: string
+  jersey_number: string
 }
 
 type InputMode = 'text' | 'image' | 'manual'
@@ -84,6 +133,17 @@ function Badge({ pos }: { pos: string }) {
     }}>
       {POSITION_LABELS[pos] || pos}
     </span>
+  )
+}
+
+function StatusDot({ status }: { status: EffectifStatus }) {
+  const c = STATUS_COLORS[status]
+  return (
+    <span style={{
+      display: 'inline-block', width: 8, height: 8,
+      borderRadius: '50%', background: c.dot, flexShrink: 0,
+      boxShadow: status !== 'empty' ? `0 0 5px ${c.dot}88` : 'none',
+    }} />
   )
 }
 
@@ -121,15 +181,56 @@ export default function Admin() {
   const [confirming, setConfirming] = useState(false)
   const [confirmSuccess, setConfirmSuccess] = useState<string | null>(null)
   const [entries, setEntries] = useState<PlayerEntry[]>([])
-  const [players, setPlayers] = useState<any[]>([])
+  const [players, setPlayers] = useState<ExistingPlayer[]>([])
   const [stats, setStats] = useState<any>(null)
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // ── Statistiques par équipe (pour les couleurs d'effectif) ───────────────────
+  const [teamStats, setTeamStats] = useState<Record<string, TeamStat>>({})
+
+  // ── États édition joueurs existants ──────────────────────────────────────────
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({
+    name: '', nationality: '', position: 'FWD', team: '', price: '7', age: '', jersey_number: '',
+  })
+  const [saving, setSaving] = useState(false)
+  const [editSuccess, setEditSuccess] = useState<string | null>(null)
+
+  // ── Multi-sélection dans l'onglet Joueurs ────────────────────────────────────
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<Set<string>>(new Set())
+  const [batchDeleting, setBatchDeleting] = useState(false)
 
   const [manualPlayer, setManualPlayer] = useState<PlayerEntry>({
     name: '', nationality: '', position: 'FWD', team: '', price: 7,
     age: null, jersey_number: null, _selected: true, _type: 'player',
   })
+
+  // ── Chargement des stats d'équipes ───────────────────────────────────────────
+  const loadTeamStats = async () => {
+    try {
+      const { data } = await axios.get('/api/v1/admin/team-stats')
+      // data: { stats: { "France": { players: 22, coaches: 1 }, ... } }
+      setTeamStats(data.stats || {})
+    } catch {
+      // fallback: calculer depuis la liste joueurs si l'endpoint n'existe pas
+      try {
+        const { data } = await axios.get('/api/v1/admin/players?limit=9999')
+        const acc: Record<string, TeamStat> = {}
+        for (const p of data.players || []) {
+          const key = p.team || p.nationality
+          if (!acc[key]) acc[key] = { players: 0, coaches: 0 }
+          if (p.position === 'COACH') acc[key].coaches++
+          else acc[key].players++
+        }
+        setTeamStats(acc)
+      } catch {}
+    }
+  }
+
+  useEffect(() => { loadTeamStats() }, [])
+
+  const getTeamStat = (equipe: string): TeamStat => teamStats[equipe] || { players: 0, coaches: 0 }
 
   const filteredNations = TOUTES_EQUIPES.filter(({ equipe }) =>
     equipe.toLowerCase().includes(nationSearch.toLowerCase())
@@ -166,12 +267,7 @@ export default function Admin() {
       const { data } = await axios.post<ParseResult>('/api/v1/admin/import-players', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      const fixNation = (p: PlayerEntry) => ({
-        ...p,
-        nationality: selectedNation,
-        team: selectedNation,
-        _selected: true,
-      })
+      const fixNation = (p: PlayerEntry) => ({ ...p, nationality: selectedNation, team: selectedNation, _selected: true })
       const all: PlayerEntry[] = [
         ...data.players.map(p => ({ ...fixNation(p), _type: 'player' as const })),
         ...data.coaches.map(c => ({ ...fixNation(c), _type: 'coach' as const })),
@@ -205,25 +301,83 @@ export default function Admin() {
 
   const removeEntry = (idx: number) => setEntries(prev => prev.filter((_, i) => i !== idx))
 
+  // Sélection d'un groupe d'entrées dans la table d'import
+  const toggleEntrySelected = (idx: number) =>
+    updateEntry(idx, '_selected', !entries[idx]._selected)
+
+  const selectAllEntries = (val: boolean) =>
+    setEntries(prev => prev.map(e => ({ ...e, _selected: val })))
+
+  const selectEntriesByType = (type: 'player' | 'coach', val: boolean) =>
+    setEntries(prev => prev.map(e => e._type === type ? { ...e, _selected: val } : e))
+
   const handleConfirm = async () => {
     const selected = entries.filter(e => e._selected)
     if (!selected.length) { setError('Sélectionnez au moins une entrée.'); return }
     setConfirming(true); setError(null)
     try {
       const payload = {
-        players: selected.filter(e => e._type === 'player').map(({ _selected, _type, _editing, ...rest }) => rest),
-        coaches: selected.filter(e => e._type === 'coach').map(({ _selected, _type, _editing, ...rest }) => rest),
+        players: selected.filter(e => e._type === 'player').map(({ _selected, _type, ...rest }) => rest),
+        coaches: selected.filter(e => e._type === 'coach').map(({ _selected, _type, ...rest }) => rest),
       }
       const { data } = await axios.post('/api/v1/admin/confirm-import', payload)
-      setConfirmSuccess(`✅ ${data.inserted_players} joueur(s) et ${data.inserted_coaches} entraîneur(s) importés pour ${selectedNation}` + (data.errors.length ? ` | ⚠ ${data.errors.length} erreur(s)` : ''))
+      setConfirmSuccess(
+        `✅ ${data.inserted_players} joueur(s) et ${data.inserted_coaches} entraîneur(s) importés` +
+        (data.skipped_players + data.skipped_coaches > 0 ? ` · ${data.skipped_players + data.skipped_coaches} déjà existant(s) conservé(s)` : '') +
+        (data.errors.length ? ` · ⚠ ${data.errors.length} erreur(s)` : '')
+      )
       setResult(null); setEntries([]); setText(''); setImageFile(null); setImagePreview(null)
+      loadTeamStats()
     } catch (e: any) {
       setError(e.response?.data?.detail || 'Erreur lors de la confirmation')
     } finally { setConfirming(false) }
   }
 
-  const loadPlayers = async () => {
-    try { const { data } = await axios.get('/api/v1/admin/players'); setPlayers(data.players) } catch {}
+  // ── Édition joueur/coach existant ────────────────────────────────────────────
+
+  const startEdit = (p: ExistingPlayer) => {
+    setEditingId(p.id)
+    setEditForm({
+      name: p.name, nationality: p.nationality, position: p.position,
+      team: p.team, price: formatPrice(p.price),
+      age: String(p.stats?.age || ''), jersey_number: String(p.stats?.jersey_number || ''),
+    })
+    setEditSuccess(null)
+  }
+
+  const cancelEdit = () => { setEditingId(null); setEditSuccess(null) }
+
+  const saveEdit = async (id: string) => {
+    setSaving(true)
+    try {
+      const priceVal = parsePrice(editForm.price)
+      const isCoach = editForm.position === 'COACH'
+      const endpoint = isCoach ? `/api/v1/admin/coaches/${id}` : `/api/v1/admin/players/${id}`
+      const payload = isCoach
+        ? { name: editForm.name, nationality: editForm.nationality, team: editForm.team, price: priceVal }
+        : {
+            name: editForm.name, nationality: editForm.nationality, position: editForm.position,
+            team: editForm.team, price: priceVal,
+            age: editForm.age ? parseInt(editForm.age) : null,
+            jersey_number: editForm.jersey_number ? parseInt(editForm.jersey_number) : null,
+          }
+      await axios.put(endpoint, payload)
+      setEditSuccess(`✅ ${editForm.name} mis à jour`)
+      setEditingId(null)
+      loadPlayers()
+      loadTeamStats()
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Erreur lors de la modification')
+    } finally { setSaving(false) }
+  }
+
+  const loadPlayers = async (team?: string) => {
+    try {
+      const url = team ? `/api/v1/admin/players?team=${encodeURIComponent(team)}` : '/api/v1/admin/players'
+      const { data } = await axios.get(url)
+      setPlayers(data.players)
+      setSelectedPlayerIds(new Set()) // reset sélection
+    } catch {}
   }
 
   const loadStats = async () => {
@@ -234,15 +388,68 @@ export default function Admin() {
     setTab(t)
     if (t === 'players') loadPlayers()
     if (t === 'stats') loadStats()
+    if (t === 'groupes') loadTeamStats()
   }
 
   const deletePlayer = async (id: string) => {
     if (!confirm('Supprimer ce joueur ?')) return
     await axios.delete(`/api/v1/admin/players/${id}`)
-    loadPlayers()
+    setSelectedPlayerIds(prev => { const n = new Set(prev); n.delete(id); return n })
+    loadPlayers(); loadTeamStats()
+  }
+
+  // ── Multi-sélection joueurs ───────────────────────────────────────────────────
+
+  const toggleSelectPlayer = (id: string) => {
+    setSelectedPlayerIds(prev => {
+      const n = new Set(prev)
+      if (n.has(id)) n.delete(id); else n.add(id)
+      return n
+    })
+  }
+
+  const selectAllPlayers = (val: boolean) => {
+    setSelectedPlayerIds(val ? new Set(players.map(p => p.id)) : new Set())
+  }
+
+  const selectByPosition = (pos: string) => {
+    const ids = players.filter(p => p.position === pos).map(p => p.id)
+    setSelectedPlayerIds(prev => {
+      const n = new Set(prev)
+      ids.forEach(id => n.add(id))
+      return n
+    })
+  }
+
+  const batchDelete = async () => {
+    if (!selectedPlayerIds.size) return
+    if (!confirm(`Supprimer les ${selectedPlayerIds.size} joueur(s) sélectionné(s) ?`)) return
+    setBatchDeleting(true)
+    try {
+      await Promise.all([...selectedPlayerIds].map(id => axios.delete(`/api/v1/admin/players/${id}`)))
+      setSelectedPlayerIds(new Set())
+      loadPlayers(); loadTeamStats()
+    } catch (e: any) {
+      setError('Erreur lors de la suppression groupée')
+    } finally { setBatchDeleting(false) }
   }
 
   const selectedNationInfo = TOUTES_EQUIPES.find(e => e.equipe === selectedNation)
+
+  // ── Résumé effectif courant pour la nation sélectionnée ─────────────────────
+  const currentNationStat = selectedNation ? getTeamStat(selectedNation) : null
+  const currentStatus = currentNationStat
+    ? getEffectifStatus(currentNationStat.players, currentNationStat.coaches)
+    : 'empty'
+
+  const playersSel = entries.filter(e => e._selected)
+  const playersSelCount = playersSel.filter(e => e._type === 'player').length
+  const coachSelCount = playersSel.filter(e => e._type === 'coach').length
+  const allChecked = entries.length > 0 && entries.every(e => e._selected)
+  const someChecked = entries.some(e => e._selected) && !allChecked
+
+  const allPlayersChecked = players.length > 0 && selectedPlayerIds.size === players.length
+  const somePlayersChecked = selectedPlayerIds.size > 0 && !allPlayersChecked
 
   return (
     <div style={S.bg}>
@@ -264,6 +471,18 @@ export default function Admin() {
         <div style={S.titleRow}>
           <h1 style={S.title}>Panneau d'Administration</h1>
           <p style={S.subtitle}>Gestion des effectifs · 48 équipes · Coupe du Monde 2026</p>
+        </div>
+
+        {/* ── Légende statut ── */}
+        <div style={S.legendBar}>
+          {(['empty', 'partial', 'complete'] as EffectifStatus[]).map(s => (
+            <div key={s} style={S.legendItem}>
+              <StatusDot status={s} />
+              <span style={{ fontSize: 12, color: STATUS_COLORS[s].text }}>
+                {s === 'empty' ? 'Non remplie' : s === 'partial' ? 'En cours (< 26 + coach)' : 'Complète (26 + coach)'}
+              </span>
+            </div>
+          ))}
         </div>
 
         {/* ── Tabs ── */}
@@ -292,10 +511,24 @@ export default function Admin() {
               <div style={S.nationCardHeader}>
                 <span style={S.nationCardTitle}>🌍 Sélectionner la nation</span>
                 {selectedNation && (
-                  <span style={S.nationSelected}>
-                    {FLAG_EMOJIS[selectedNation] || '🏳️'} {selectedNation}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <StatusDot status={currentStatus} />
+                    <span style={{ fontSize: 16, fontWeight: 600, color: '#f5f5f0' }}>
+                      {FLAG_EMOJIS[selectedNation] || '🏳️'} {selectedNation}
+                    </span>
                     {selectedNationInfo && <span style={S.groupeBadge}>Groupe {selectedNationInfo.groupe}</span>}
-                  </span>
+                    {currentNationStat && (
+                      <span style={{
+                        fontSize: 12,
+                        color: STATUS_COLORS[currentStatus].text,
+                        background: STATUS_COLORS[currentStatus].bg,
+                        border: `1px solid ${STATUS_COLORS[currentStatus].border}`,
+                        borderRadius: 6, padding: '2px 8px',
+                      }}>
+                        {currentNationStat.players}/26 joueurs · {currentNationStat.coaches ? '✓' : '✗'} coach
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -318,15 +551,25 @@ export default function Admin() {
                       return (
                         <div key={groupe}>
                           <div style={S.groupeHeader}>Groupe {groupe}</div>
-                          {filtered.map(equipe => (
-                            <div key={equipe} onClick={() => handleSelectNation(equipe)} style={{
-                              ...S.nationOption,
-                              ...(equipe === selectedNation ? S.nationOptionActive : {}),
-                            }}>
-                              <span style={{ fontSize: 20 }}>{FLAG_EMOJIS[equipe] || '🏳️'}</span>
-                              <span>{equipe}</span>
-                            </div>
-                          ))}
+                          {filtered.map(equipe => {
+                            const st = getTeamStat(equipe)
+                            const status = getEffectifStatus(st.players, st.coaches)
+                            return (
+                              <div key={equipe} onClick={() => handleSelectNation(equipe)} style={{
+                                ...S.nationOption,
+                                ...(equipe === selectedNation ? S.nationOptionActive : {}),
+                              }}>
+                                <span style={{ fontSize: 20 }}>{FLAG_EMOJIS[equipe] || '🏳️'}</span>
+                                <span style={{ flex: 1 }}>{equipe}</span>
+                                <StatusDot status={status} />
+                                {status !== 'empty' && (
+                                  <span style={{ fontSize: 11, color: STATUS_COLORS[status].text, minWidth: 60, textAlign: 'right' }}>
+                                    {st.players}/26
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
                       )
                     })}
@@ -338,17 +581,26 @@ export default function Admin() {
                 )}
               </div>
 
-              {/* Grille des groupes rapide */}
               {!showNationPicker && !selectedNation && (
                 <div style={S.groupesGrid}>
                   {Object.entries(GROUPES).map(([groupe, equipes]) => (
                     <div key={groupe} style={S.groupeCard}>
                       <div style={S.groupeCardTitle}>Groupe {groupe}</div>
-                      {equipes.map(eq => (
-                        <button key={eq} onClick={() => handleSelectNation(eq)} style={S.equipeBtn}>
-                          {FLAG_EMOJIS[eq] || '🏳️'} {eq}
-                        </button>
-                      ))}
+                      {equipes.map(eq => {
+                        const st = getTeamStat(eq)
+                        const status = getEffectifStatus(st.players, st.coaches)
+                        const c = STATUS_COLORS[status]
+                        return (
+                          <button key={eq} onClick={() => handleSelectNation(eq)} style={{
+                            ...S.equipeBtn,
+                            borderLeft: `2px solid ${c.dot}`,
+                            paddingLeft: 6,
+                          }}>
+                            <span>{FLAG_EMOJIS[eq] || '🏳️'} {eq}</span>
+                            <StatusDot status={status} />
+                          </button>
+                        )
+                      })}
                     </div>
                   ))}
                 </div>
@@ -363,7 +615,7 @@ export default function Admin() {
                     <h2 style={S.cardTitle}>
                       {FLAG_EMOJIS[selectedNation] || '🏳️'} Effectif — {selectedNation}
                     </h2>
-                    <p style={S.cardSub}>Groq (texte) · Gemini Vision (image) · Manuel</p>
+                    <p style={S.cardSub}>Groq (texte) · Gemini Vision (image) · Manuel · Prix: 4–12 M€</p>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <span style={S.groqTag}>Groq</span>
@@ -384,14 +636,13 @@ export default function Admin() {
                 {/* ── Mode texte ── */}
                 {mode === 'text' && (
                   <div>
-                    <label style={S.label}>Collez l'effectif complet (liste des joueurs)</label>
+                    <label style={S.label}>Collez l'effectif complet</label>
                     <textarea value={text} onChange={e => setText(e.target.value)}
-                      placeholder={"Exemple :\nGardiens : Raul Rangel (Chivas), Carlos Acevedo\nDéfenseurs : Jorge Sánchez (PAOK)...\nMilieux : Edson Álvarez (Fenerbahçe)...\nAttaquants : Roberto Alvarado...\nEntraîneur : Javier Aguirre"}
-                      style={S.textarea} rows={10} />
-                    <button onClick={handleParse}
-                      disabled={loading || !text.trim()}
+                      placeholder={"Gardiens : Raul Rangel\nDéfenseurs : Jorge Sánchez\nMillieux : Edson Álvarez\nAttaquants : Roberto Alvarado\nEntraîneur : Javier Aguirre"}
+                      style={S.textarea} rows={9} />
+                    <button onClick={handleParse} disabled={loading || !text.trim()}
                       style={{ ...S.btnGold, ...(loading ? S.btnDisabled : {}) }}>
-                      {loading ? '⟳ Analyse...' : `🚀 Analyser avec Groq → ${selectedNation}`}
+                      {loading ? '⟳ Analyse...' : `🚀 Analyser → ${selectedNation}`}
                     </button>
                   </div>
                 )}
@@ -408,9 +659,7 @@ export default function Admin() {
                       {imagePreview ? (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
                           <img src={imagePreview} alt="preview" style={{ maxHeight: 200, maxWidth: '100%', borderRadius: 8 }} />
-                          <button style={S.removeImg} onClick={e => { e.stopPropagation(); setImageFile(null); setImagePreview(null) }}>
-                            ✕ Changer
-                          </button>
+                          <button style={S.removeImg} onClick={e => { e.stopPropagation(); setImageFile(null); setImagePreview(null) }}>✕ Changer</button>
                         </div>
                       ) : (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
@@ -423,8 +672,7 @@ export default function Admin() {
                     <input ref={fileRef} type="file" accept="image/*"
                       onChange={e => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)) } }}
                       style={{ display: 'none' }} />
-                    <button onClick={handleParse}
-                      disabled={loading || !imageFile}
+                    <button onClick={handleParse} disabled={loading || !imageFile}
                       style={{ ...S.btnGold, ...(loading ? S.btnDisabled : {}), marginTop: 12 }}>
                       {loading ? '⟳ Analyse Gemini...' : `🤖 Analyser l'image → ${selectedNation}`}
                     </button>
@@ -444,41 +692,56 @@ export default function Admin() {
                       <div>
                         <label style={S.label}>Poste *</label>
                         <select value={manualPlayer.position}
-                          onChange={e => setManualPlayer(p => ({ ...p, position: e.target.value as any, _type: e.target.value === 'COACH' ? 'coach' : 'player' }))}
+                          onChange={e => {
+                            const pos = e.target.value as any
+                            setManualPlayer(p => ({ ...p, position: pos, _type: pos === 'COACH' ? 'coach' : 'player' }))
+                          }}
                           style={S.select}>
-                          <option value="GK">Gardien (GK)</option>
-                          <option value="DEF">Défenseur (DEF)</option>
-                          <option value="MID">Milieu (MID)</option>
-                          <option value="FWD">Attaquant (FWD)</option>
-                          <option value="COACH">Entraîneur</option>
+                          <option value="GK">🧤 Gardien (GK)</option>
+                          <option value="DEF">🛡️ Défenseur (DEF)</option>
+                          <option value="MID">⚙️ Milieu (MID)</option>
+                          <option value="FWD">⚡ Attaquant (FWD)</option>
+                          <option value="COACH">🧑‍💼 Entraîneur</option>
                         </select>
                       </div>
                       <div>
-                        <label style={S.label}>Prix (M€)</label>
-                        <input type="number" value={manualPlayer.price} min={1} max={30}
-                          onChange={e => setManualPlayer(p => ({ ...p, price: parseInt(e.target.value) || 7 }))}
-                          style={S.input} />
+                        <label style={S.label}>Prix M€ (ex: 4,5)</label>
+                        <input type="text" inputMode="decimal"
+                          value={manualPlayer.price}
+                          onChange={e => setManualPlayer(p => ({ ...p, price: parsePrice(e.target.value) }))}
+                          placeholder="7 ou 7,5" style={S.input} />
                       </div>
-                      <div>
-                        <label style={S.label}>Âge</label>
-                        <input type="number" value={manualPlayer.age || ''}
-                          onChange={e => setManualPlayer(p => ({ ...p, age: parseInt(e.target.value) || null }))}
-                          placeholder="Ex: 25" style={S.input} />
-                      </div>
-                      <div>
-                        <label style={S.label}>N° maillot</label>
-                        <input type="number" value={manualPlayer.jersey_number || ''}
-                          onChange={e => setManualPlayer(p => ({ ...p, jersey_number: parseInt(e.target.value) || null }))}
-                          placeholder="Ex: 10" style={S.input} />
-                      </div>
+                      {manualPlayer.position !== 'COACH' && (
+                        <>
+                          <div>
+                            <label style={S.label}>Âge</label>
+                            <input type="number" value={manualPlayer.age || ''}
+                              onChange={e => setManualPlayer(p => ({ ...p, age: parseInt(e.target.value) || null }))}
+                              placeholder="Ex: 25" style={S.input} />
+                          </div>
+                          <div>
+                            <label style={S.label}>N° maillot</label>
+                            <input type="number" value={manualPlayer.jersey_number || ''}
+                              onChange={e => setManualPlayer(p => ({ ...p, jersey_number: parseInt(e.target.value) || null }))}
+                              placeholder="Ex: 10" style={S.input} />
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <button onClick={handleAddManual} style={{ ...S.btnGold, marginTop: 0 }}>
-                      ➕ Ajouter à {selectedNation}
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <button onClick={handleAddManual} style={{ ...S.btnGold, marginTop: 0 }}>
+                        {manualPlayer.position === 'COACH' ? '🧑‍💼' : '⚽'} Ajouter à {selectedNation}
+                      </button>
+                      {manualPlayer.position !== 'COACH' && (
+                        <button onClick={() => setManualPlayer(p => ({ ...p, position: 'COACH', _type: 'coach' }))}
+                          style={{ ...S.btnMini, padding: '8px 14px', color: '#8b5cf6', border: '1px solid #8b5cf644' }}>
+                          + Ajouter entraîneur
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )}
 
-                {/* Erreur / succès */}
                 {error && (
                   <div style={S.errorBanner}>
                     <span>{error}</span>
@@ -487,21 +750,29 @@ export default function Admin() {
                 )}
                 {confirmSuccess && <div style={S.successBanner}>{confirmSuccess}</div>}
 
-                {/* ── Table des entrées parsées / manuelles ── */}
+                {/* ── Table des entrées ── */}
                 {entries.length > 0 && (
                   <div style={S.results}>
                     <div style={S.resultsHeader}>
-                      <h3 style={{ fontSize: 15, fontWeight: 600, color: '#f5f5f0' }}>
-                        {FLAG_EMOJIS[selectedNation]} {selectedNation} — {entries.length} joueur(s)
-                        {result && <span style={{ color: '#8a9a8c', fontWeight: 400, fontSize: 13 }}> · {result.source_info}</span>}
+                      <h3 style={{ fontSize: 15, fontWeight: 600, color: '#f5f5f0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {FLAG_EMOJIS[selectedNation]} {selectedNation} — {entries.length} entrée(s)
+                        {result && <span style={{ color: '#8a9a8c', fontWeight: 400, fontSize: 13 }}>· {result.source_info}</span>}
                       </h3>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button style={S.btnMini} onClick={() => setEntries(e => e.map(x => ({ ...x, _selected: true })))}>Tout ✓</button>
-                        <button style={S.btnMini} onClick={() => setEntries(e => e.map(x => ({ ...x, _selected: false })))}>Tout ✗</button>
+                      {/* Boutons de sélection rapide */}
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <button style={S.btnMini} onClick={() => selectAllEntries(true)}>✓ Tout</button>
+                        <button style={S.btnMini} onClick={() => selectAllEntries(false)}>✗ Tout</button>
+                        <button style={{ ...S.btnMini, color: '#8b5cf6', border: '1px solid #8b5cf633' }}
+                          onClick={() => selectEntriesByType('coach', true)}>
+                          🧑‍💼 Coaches
+                        </button>
+                        <button style={{ ...S.btnMini, color: '#3b82f6', border: '1px solid #3b82f633' }}
+                          onClick={() => selectEntriesByType('player', true)}>
+                          ⚽ Joueurs
+                        </button>
                       </div>
                     </div>
 
-                    {/* Avertissements IA */}
                     {result?.warnings && result.warnings.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                         {result.warnings.map((w, i) => (
@@ -510,17 +781,53 @@ export default function Admin() {
                       </div>
                     )}
 
+                    {/* ── Section entraîneur en haut ── */}
+                    {entries.some(e => e._type === 'coach') && (
+                      <div style={S.coachSection}>
+                        <div style={S.coachSectionTitle}>🧑‍💼 Entraîneur(s)</div>
+                        {entries.map((entry, idx) => entry._type !== 'coach' ? null : (
+                          <div key={idx} style={{ ...S.coachRow, opacity: entry._selected ? 1 : 0.5 }}>
+                            <input type="checkbox" checked={!!entry._selected}
+                              onChange={() => toggleEntrySelected(idx)}
+                              style={{ accentColor: '#8b5cf6', width: 15, height: 15 }} />
+                            <span style={{ fontSize: 20 }}>{FLAG_EMOJIS[entry.nationality] || '🏳️'}</span>
+                            <input value={entry.name}
+                              onChange={e => updateEntry(idx, 'name', e.target.value)}
+                              style={{ ...S.inlineInput, flex: 1, minWidth: 120 }} />
+                            <span style={{ fontSize: 11, color: '#8b5cf6' }}>Entraîneur</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 12, color: '#8a9a8c' }}>Prix:</span>
+                              <input type="text" inputMode="decimal"
+                                value={entry.price}
+                                onChange={e => updateEntry(idx, 'price', parsePrice(e.target.value))}
+                                style={{ ...S.inlineInput, width: 55, color: '#c9a84c' }} />
+                              <span style={{ fontSize: 11, color: '#8a9a8c' }}>M</span>
+                            </div>
+                            <button onClick={() => removeEntry(idx)} style={S.btnDelete}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* ── Table joueurs ── */}
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                            {['Sél.', 'N°', 'Nom', 'Poste', 'Nationalité', 'Équipe', 'Prix (M€)', 'Âge', 'Sup.'].map((h, i) => (
+                            <th style={{ ...S.th, width: 36 }}>
+                              <input type="checkbox"
+                                checked={allChecked}
+                                ref={el => { if (el) el.indeterminate = someChecked }}
+                                onChange={e => selectAllEntries(e.target.checked)}
+                                style={{ accentColor: '#c9a84c', width: 15, height: 15 }} />
+                            </th>
+                            {['N°', 'Nom', 'Poste', 'Prix M€', 'Âge', ''].map((h, i) => (
                               <th key={i} style={S.th}>{h}</th>
                             ))}
                           </tr>
                         </thead>
                         <tbody>
-                          {entries.map((entry, idx) => (
+                          {entries.map((entry, idx) => entry._type !== 'player' ? null : (
                             <tr key={idx} style={{
                               borderBottom: '1px solid rgba(255,255,255,0.04)',
                               opacity: entry._selected ? 1 : 0.4,
@@ -528,7 +835,7 @@ export default function Admin() {
                             }}>
                               <td style={{ ...S.td, width: 36 }}>
                                 <input type="checkbox" checked={!!entry._selected}
-                                  onChange={() => updateEntry(idx, '_selected', !entry._selected)}
+                                  onChange={() => toggleEntrySelected(idx)}
                                   style={{ accentColor: '#c9a84c', width: 15, height: 15 }} />
                               </td>
                               <td style={{ ...S.td, width: 50 }}>
@@ -545,24 +852,15 @@ export default function Admin() {
                                 <select value={entry.position}
                                   onChange={e => updateEntry(idx, 'position', e.target.value)}
                                   style={S.inlineSelect}>
-                                  {['GK', 'DEF', 'MID', 'FWD', 'COACH'].map(p => (
+                                  {['GK', 'DEF', 'MID', 'FWD'].map(p => (
                                     <option key={p} value={p}>{p}</option>
                                   ))}
                                 </select>
                               </td>
                               <td style={S.td}>
-                                <span style={{ fontSize: 13, color: '#c9a84c' }}>
-                                  {FLAG_EMOJIS[entry.nationality] || '🏳️'} {entry.nationality}
-                                </span>
-                              </td>
-                              <td style={S.td}>
-                                <input value={entry.team}
-                                  onChange={e => updateEntry(idx, 'team', e.target.value)}
-                                  style={{ ...S.inlineInput, width: 100 }} />
-                              </td>
-                              <td style={S.td}>
-                                <input type="number" value={entry.price} min={1} max={30}
-                                  onChange={e => updateEntry(idx, 'price', parseInt(e.target.value) || 1)}
+                                <input type="text" inputMode="decimal"
+                                  value={entry.price}
+                                  onChange={e => updateEntry(idx, 'price', parsePrice(e.target.value))}
                                   style={{ ...S.inlineInput, width: 55, color: '#c9a84c' }} />
                               </td>
                               <td style={S.td}>
@@ -579,16 +877,14 @@ export default function Admin() {
                       </table>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, flexWrap: 'wrap', gap: 10 }}>
                       <span style={{ fontSize: 13, color: '#8a9a8c' }}>
-                        {entries.filter(e => e._selected).length} / {entries.length} sélectionné(s)
-                        · {entries.filter(e => e._selected && e._type === 'player').length} joueurs
-                        · {entries.filter(e => e._selected && e._type === 'coach').length} coach
+                        {playersSelCount} joueur(s) + {coachSelCount} coach sélectionné(s)
                       </span>
                       <button onClick={handleConfirm}
-                        disabled={confirming || !entries.filter(e => e._selected).length}
+                        disabled={confirming || !playersSel.length}
                         style={{ ...S.btnConfirm, ...(confirming ? S.btnDisabled : {}) }}>
-                        {confirming ? '⟳ Importation...' : `✅ Confirmer l'import — ${selectedNation}`}
+                        {confirming ? '⟳ Importation...' : `✅ Confirmer l'import`}
                       </button>
                     </div>
                   </div>
@@ -599,37 +895,87 @@ export default function Admin() {
         )}
 
         {/* ══════════════════════════════════════════════════
-            TAB : JOUEURS
+            TAB : JOUEURS — multi-sélection + édition inline
         ══════════════════════════════════════════════════ */}
         {tab === 'players' && (
           <div style={S.card}>
             <div style={S.cardHeader}>
               <h2 style={S.cardTitle}>Joueurs & Entraîneurs ({players.length})</h2>
-              <button onClick={loadPlayers} style={S.btnMini}>🔄 Actualiser</button>
+              <button onClick={() => loadPlayers()} style={S.btnMini}>🔄 Actualiser</button>
             </div>
 
-            <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {editSuccess && <div style={{ ...S.successBanner, marginBottom: 12 }}>{editSuccess}</div>}
+            {error && (
+              <div style={{ ...S.errorBanner, marginBottom: 12 }}>
+                <span>{error}</span>
+                <button onClick={() => setError(null)} style={S.closeBtn}>✕</button>
+              </div>
+            )}
+
+            {/* Filtre par équipe */}
+            <div style={{ marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
               {Object.entries(GROUPES).map(([g, equipes]) =>
-                equipes.map(eq => (
-                  <button key={`${g}-${eq}`} onClick={async () => {
-                    try {
-                      const { data } = await axios.get(`/api/v1/admin/players?team=${encodeURIComponent(eq)}`)
-                      setPlayers(data.players)
-                    } catch {}
-                  }} style={{
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 6, padding: '4px 10px',
-                    color: '#8a9a8c', fontSize: 11, cursor: 'pointer',
-                  }}>
-                    {FLAG_EMOJIS[eq] || '🏳️'} {eq}
-                  </button>
-                ))
+                equipes.map(eq => {
+                  const st = getTeamStat(eq)
+                  const status = getEffectifStatus(st.players, st.coaches)
+                  const c = STATUS_COLORS[status]
+                  return (
+                    <button key={`${g}-${eq}`} onClick={() => loadPlayers(eq)} style={{
+                      background: c.bg,
+                      border: `1px solid ${c.border}`,
+                      borderRadius: 6, padding: '3px 8px',
+                      color: c.text, fontSize: 11, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      <StatusDot status={status} />
+                      {FLAG_EMOJIS[eq] || '🏳️'} {eq}
+                    </button>
+                  )
+                })
               )}
-              <button onClick={loadPlayers} style={{ ...S.btnMini, background: 'rgba(201,168,76,0.1)', color: '#c9a84c' }}>
-                Toutes les équipes
+              <button onClick={() => loadPlayers()} style={{ ...S.btnMini, color: '#c9a84c', border: '1px solid rgba(201,168,76,0.3)' }}>
+                Toutes
               </button>
             </div>
+
+            {/* ── Barre multi-sélection ── */}
+            {players.length > 0 && (
+              <div style={S.multiSelectBar}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                  <input type="checkbox"
+                    checked={allPlayersChecked}
+                    ref={el => { if (el) el.indeterminate = somePlayersChecked }}
+                    onChange={e => selectAllPlayers(e.target.checked)}
+                    style={{ accentColor: '#c9a84c', width: 15, height: 15 }} />
+                  <span style={{ fontSize: 13, color: '#8a9a8c' }}>
+                    {selectedPlayerIds.size > 0
+                      ? `${selectedPlayerIds.size} sélectionné(s)`
+                      : `Sélectionner tout (${players.length})`}
+                  </span>
+                </label>
+
+                {/* Sélection rapide par poste */}
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {['GK', 'DEF', 'MID', 'FWD', 'COACH'].map(pos => (
+                    <button key={pos} onClick={() => selectByPosition(pos)} style={{
+                      background: POSITION_COLORS[pos] + '15',
+                      border: `1px solid ${POSITION_COLORS[pos]}33`,
+                      borderRadius: 5, padding: '3px 8px',
+                      color: POSITION_COLORS[pos], fontSize: 11, cursor: 'pointer',
+                    }}>
+                      {pos}
+                    </button>
+                  ))}
+                </div>
+
+                {selectedPlayerIds.size > 0 && (
+                  <button onClick={batchDelete} disabled={batchDeleting}
+                    style={{ ...S.btnDeleteBatch, ...(batchDeleting ? S.btnDisabled : {}) }}>
+                    {batchDeleting ? '⟳ Suppression...' : `🗑 Supprimer (${selectedPlayerIds.size})`}
+                  </button>
+                )}
+              </div>
+            )}
 
             {players.length === 0 ? (
               <div style={S.empty}>
@@ -641,26 +987,112 @@ export default function Admin() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                      {['Nation', 'Nom', 'Poste', 'Prix', 'Âge', 'Sup.'].map((h, i) => (
+                      <th style={{ ...S.th, width: 36 }}></th>
+                      {['Nation', 'Nom', 'Poste', 'Prix', 'Âge', 'Actions'].map((h, i) => (
                         <th key={i} style={S.th}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {players.map(p => (
-                      <tr key={p.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                        <td style={S.td}>
-                          <span style={{ fontSize: 18 }}>{FLAG_EMOJIS[p.nationality] || '🏳️'}</span>
-                          <span style={{ fontSize: 12, color: '#8a9a8c', marginLeft: 6 }}>{p.nationality}</span>
-                        </td>
-                        <td style={{ ...S.td, fontWeight: 500 }}>{p.name}</td>
-                        <td style={S.td}><Badge pos={p.position} /></td>
-                        <td style={{ ...S.td, color: '#c9a84c' }}>{p.price}M</td>
-                        <td style={{ ...S.td, color: '#8a9a8c' }}>{p.stats?.age || '—'}</td>
-                        <td style={S.td}>
-                          <button onClick={() => deletePlayer(p.id)} style={S.btnDelete}>✕</button>
-                        </td>
-                      </tr>
+                      <React.Fragment key={p.id}>
+                        {/* ── Ligne normale ── */}
+                        {editingId !== p.id && (
+                          <tr style={{
+                            borderBottom: '1px solid rgba(255,255,255,0.04)',
+                            background: selectedPlayerIds.has(p.id) ? 'rgba(201,168,76,0.06)' : 'transparent',
+                          }}>
+                            <td style={{ ...S.td, width: 36 }}>
+                              <input type="checkbox"
+                                checked={selectedPlayerIds.has(p.id)}
+                                onChange={() => toggleSelectPlayer(p.id)}
+                                style={{ accentColor: '#c9a84c', width: 15, height: 15 }} />
+                            </td>
+                            <td style={S.td}>
+                              <span style={{ fontSize: 18 }}>{FLAG_EMOJIS[p.nationality] || '🏳️'}</span>
+                              <span style={{ fontSize: 12, color: '#8a9a8c', marginLeft: 6 }}>{p.nationality}</span>
+                            </td>
+                            <td style={{ ...S.td, fontWeight: 500 }}>{p.name}</td>
+                            <td style={S.td}><Badge pos={p.position} /></td>
+                            <td style={{ ...S.td, color: '#c9a84c' }}>{formatPrice(p.price)}M</td>
+                            <td style={{ ...S.td, color: '#8a9a8c' }}>{p.stats?.age || '—'}</td>
+                            <td style={S.td}>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button onClick={() => startEdit(p)} style={S.btnEdit} title="Modifier">✏️</button>
+                                <button onClick={() => deletePlayer(p.id)} style={S.btnDelete} title="Supprimer">✕</button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+
+                        {/* ── Ligne édition ── */}
+                        {editingId === p.id && (
+                          <tr style={{ background: 'rgba(201,168,76,0.06)', borderBottom: '2px solid rgba(201,168,76,0.25)' }}>
+                            <td colSpan={7} style={{ padding: '12px 10px' }}>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'flex-end' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <label style={S.labelSm}>Nom</label>
+                                  <input value={editForm.name}
+                                    onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                                    style={{ ...S.inlineInput, minWidth: 150 }} />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <label style={S.labelSm}>Nationalité</label>
+                                  <input value={editForm.nationality}
+                                    onChange={e => setEditForm(f => ({ ...f, nationality: e.target.value }))}
+                                    style={{ ...S.inlineInput, width: 110 }} />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <label style={S.labelSm}>Poste</label>
+                                  <select value={editForm.position}
+                                    onChange={e => setEditForm(f => ({ ...f, position: e.target.value }))}
+                                    style={S.inlineSelect}>
+                                    {['GK', 'DEF', 'MID', 'FWD', 'COACH'].map(pos => (
+                                      <option key={pos} value={pos}>{POSITION_LABELS[pos] || pos}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <label style={S.labelSm}>Équipe</label>
+                                  <input value={editForm.team}
+                                    onChange={e => setEditForm(f => ({ ...f, team: e.target.value }))}
+                                    style={{ ...S.inlineInput, width: 110 }} />
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <label style={S.labelSm}>Prix M€</label>
+                                  <input type="text" inputMode="decimal"
+                                    value={editForm.price}
+                                    onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
+                                    style={{ ...S.inlineInput, width: 70, color: '#c9a84c' }} placeholder="7,5" />
+                                </div>
+                                {editForm.position !== 'COACH' && (
+                                  <>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                      <label style={S.labelSm}>Âge</label>
+                                      <input type="number" value={editForm.age}
+                                        onChange={e => setEditForm(f => ({ ...f, age: e.target.value }))}
+                                        style={{ ...S.inlineInput, width: 55 }} />
+                                    </div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                      <label style={S.labelSm}>N° maillot</label>
+                                      <input type="number" value={editForm.jersey_number}
+                                        onChange={e => setEditForm(f => ({ ...f, jersey_number: e.target.value }))}
+                                        style={{ ...S.inlineInput, width: 55 }} />
+                                    </div>
+                                  </>
+                                )}
+                                <div style={{ display: 'flex', gap: 6, paddingBottom: 2 }}>
+                                  <button onClick={() => saveEdit(p.id)} disabled={saving}
+                                    style={{ ...S.btnConfirm, fontSize: 12, padding: '6px 14px' }}>
+                                    {saving ? '⟳' : '✅ Sauvegarder'}
+                                  </button>
+                                  <button onClick={cancelEdit} style={{ ...S.btnMini, padding: '6px 14px' }}>Annuler</button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>
@@ -703,41 +1135,72 @@ export default function Admin() {
         )}
 
         {/* ══════════════════════════════════════════════════
-            TAB : GROUPES CdM 2026
+            TAB : GROUPES — avec statut couleur effectif
         ══════════════════════════════════════════════════ */}
         {tab === 'groupes' && (
           <div>
-            <div style={{ marginBottom: 16 }}>
-              <h2 style={{ ...S.cardTitle, marginBottom: 4 }}>🏆 Coupe du Monde 2026 — Groupes</h2>
-              <p style={S.cardSub}>48 équipes · 12 groupes de 4 · USA, Canada, Mexique</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+              <div>
+                <h2 style={{ ...S.cardTitle, marginBottom: 4 }}>🏆 Coupe du Monde 2026 — Groupes</h2>
+                <p style={S.cardSub}>48 équipes · 12 groupes de 4 · Effectif complet = 26 joueurs + 1 entraîneur</p>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {(['empty', 'partial', 'complete'] as EffectifStatus[]).map(s => {
+                  const count = Object.keys(GROUPES).flatMap(g => GROUPES[g]).filter(eq => {
+                    const st = getTeamStat(eq)
+                    return getEffectifStatus(st.players, st.coaches) === s
+                  }).length
+                  return (
+                    <div key={s} style={{
+                      ...S.statCard,
+                      padding: '10px 16px',
+                      borderColor: STATUS_COLORS[s].border,
+                      background: STATUS_COLORS[s].bg,
+                      minWidth: 90,
+                    }}>
+                      <StatusDot status={s} />
+                      <div style={{ fontSize: '1.5rem', fontFamily: "'Bebas Neue',sans-serif", color: STATUS_COLORS[s].text }}>{count}</div>
+                      <div style={{ fontSize: 10, color: STATUS_COLORS[s].text, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        {s === 'empty' ? 'Vides' : s === 'partial' ? 'En cours' : 'Complètes'}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
               {Object.entries(GROUPES).map(([groupe, equipes]) => (
                 <div key={groupe} style={S.groupeDetailCard}>
                   <div style={S.groupeDetailHeader}>Groupe {groupe}</div>
-                  {equipes.map((eq, i) => (
-                    <div key={eq} style={S.groupeRow}>
-                      <span style={{ color: '#8a9a8c', fontSize: 12, width: 20 }}>{i + 1}.</span>
-                      <span style={{ fontSize: 20 }}>{FLAG_EMOJIS[eq] || '🏳️'}</span>
-                      <span style={{ fontSize: 14, flex: 1 }}>{eq}</span>
-                      <button onClick={() => { setTab('import'); handleSelectNation(eq) }}
-                        style={{ ...S.btnMini, fontSize: 10, padding: '3px 7px' }}>
-                        Importer
-                      </button>
-                    </div>
-                  ))}
+                  {equipes.map((eq, i) => {
+                    const st = getTeamStat(eq)
+                    const status = getEffectifStatus(st.players, st.coaches)
+                    const c = STATUS_COLORS[status]
+                    return (
+                      <div key={eq} style={{
+                        ...S.groupeRow,
+                        background: c.bg,
+                        borderLeft: `3px solid ${c.dot}`,
+                      }}>
+                        <span style={{ color: '#8a9a8c', fontSize: 12, width: 20 }}>{i + 1}.</span>
+                        <span style={{ fontSize: 20 }}>{FLAG_EMOJIS[eq] || '🏳️'}</span>
+                        <span style={{ fontSize: 13, flex: 1 }}>{eq}</span>
+                        {/* Compteur */}
+                        <span style={{ fontSize: 11, color: c.text, minWidth: 60, textAlign: 'center' }}>
+                          {status === 'empty'
+                            ? '—'
+                            : `${st.players}/26 ${st.coaches ? '+ 🧑‍💼' : ''}`}
+                        </span>
+                        <StatusDot status={status} />
+                        <button onClick={() => { setTab('import'); handleSelectNation(eq) }}
+                          style={{ ...S.btnMini, fontSize: 10, padding: '3px 7px' }}>
+                          Import
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               ))}
-            </div>
-
-            <div style={{ ...S.card, marginTop: 20 }}>
-              <h3 style={{ ...S.cardTitle, fontSize: '1rem', marginBottom: 12 }}>📋 Règles de qualification</h3>
-              <div style={{ color: '#8a9a8c', fontSize: 13, lineHeight: 1.7 }}>
-                <p>• <strong style={{ color: '#f5f5f0' }}>2 premiers de chaque groupe</strong> → qualifiés directement (24 équipes)</p>
-                <p>• <strong style={{ color: '#f5f5f0' }}>8 meilleurs 3es</strong> sur 12 → qualifiés via classement</p>
-                <p>• Critères de départage : Points → Différence de buts → Buts marqués → Fair-play → Classement FIFA</p>
-                <p>• Total : <strong style={{ color: '#c9a84c' }}>32 équipes</strong> au tour final</p>
-              </div>
             </div>
           </div>
         )}
@@ -761,9 +1224,11 @@ const S: Record<string, React.CSSProperties> = {
   userTag: { fontSize: 13, color: '#8a9a8c' },
   btnOutline: { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '6px 14px', color: '#8a9a8c', fontSize: 12, cursor: 'pointer' },
   container: { maxWidth: 1200, margin: '0 auto', padding: '2rem 1.5rem' },
-  titleRow: { marginBottom: '1.5rem' },
+  titleRow: { marginBottom: '1rem' },
   title: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '2rem', color: '#f5f5f0', letterSpacing: '0.04em', marginBottom: 4 },
   subtitle: { color: '#8a9a8c', fontSize: 14 },
+  legendBar: { display: 'flex', gap: 20, marginBottom: 16, padding: '8px 14px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, flexWrap: 'wrap' },
+  legendItem: { display: 'flex', alignItems: 'center', gap: 7 },
   tabs: { display: 'flex', gap: 4, marginBottom: '1.5rem', borderBottom: '1px solid rgba(255,255,255,0.08)' },
   tabBtn: { background: 'transparent', border: 'none', color: '#8a9a8c', padding: '10px 20px', fontSize: 14, cursor: 'pointer', borderBottom: '2px solid transparent', transition: 'all 0.2s', borderRadius: '6px 6px 0 0' },
   tabActive: { color: '#c9a84c', borderBottom: '2px solid #c9a84c', background: 'rgba(201,168,76,0.05)' },
@@ -774,8 +1239,7 @@ const S: Record<string, React.CSSProperties> = {
   nationCard: { background: 'rgba(15,45,20,0.6)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 12, padding: '1.5rem' },
   nationCardHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 },
   nationCardTitle: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.1rem', color: '#c9a84c', letterSpacing: '0.04em' },
-  nationSelected: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 16, fontWeight: 600, color: '#f5f5f0' },
-  groupeBadge: { background: 'rgba(201,168,76,0.15)', color: '#c9a84c', borderRadius: 4, padding: '2px 8px', fontSize: 12, marginLeft: 6 },
+  groupeBadge: { background: 'rgba(201,168,76,0.15)', color: '#c9a84c', borderRadius: 4, padding: '2px 8px', fontSize: 12, marginLeft: 4 },
   nationSearch: { width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 8, padding: '10px 14px', color: '#f5f5f0', fontSize: 14, outline: 'none', boxSizing: 'border-box' },
   nationDropdown: { position: 'absolute', top: '100%', left: 0, right: 0, background: '#0f2d14', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 8, maxHeight: 320, overflowY: 'auto', zIndex: 200, marginTop: 4 },
   groupeHeader: { padding: '6px 14px', fontSize: 11, color: '#c9a84c', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(201,168,76,0.05)' },
@@ -785,11 +1249,12 @@ const S: Record<string, React.CSSProperties> = {
   groupesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 12 },
   groupeCard: { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '10px', display: 'flex', flexDirection: 'column', gap: 4 },
   groupeCardTitle: { fontSize: 11, color: '#c9a84c', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontWeight: 600 },
-  equipeBtn: { background: 'transparent', border: 'none', color: '#f5f5f0', fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: '3px 4px', borderRadius: 4, transition: 'background 0.15s' },
+  equipeBtn: { background: 'transparent', border: 'none', borderLeft: '2px solid transparent', color: '#f5f5f0', fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: '3px 6px', borderRadius: '0 4px 4px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, transition: 'background 0.15s' },
   modeToggle: { display: 'flex', gap: 8, marginBottom: '1.25rem' },
   modeBtn: { flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 16px', color: '#8a9a8c', fontSize: 14, cursor: 'pointer', transition: 'all 0.2s' },
   modeBtnActive: { background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.4)', color: '#c9a84c' },
   label: { display: 'block', fontSize: 12, color: '#8a9a8c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 },
+  labelSm: { fontSize: 10, color: '#8a9a8c', textTransform: 'uppercase', letterSpacing: '0.05em' },
   textarea: { width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '12px 14px', color: '#f5f5f0', fontSize: 14, resize: 'vertical', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 12 },
   input: { width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 12px', color: '#f5f5f0', fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' },
   select: { width: '100%', background: '#0f2d14', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 12px', color: '#f5f5f0', fontSize: 14, outline: 'none', cursor: 'pointer' },
@@ -805,6 +1270,8 @@ const S: Record<string, React.CSSProperties> = {
   btnConfirm: { background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', fontFamily: "'Bebas Neue', sans-serif", fontSize: '1rem', letterSpacing: '0.08em', border: 'none', borderRadius: 8, padding: '11px 24px', cursor: 'pointer' },
   btnMini: { background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#8a9a8c', fontSize: 11, padding: '5px 10px', cursor: 'pointer' },
   btnDelete: { background: 'rgba(224,82,82,0.1)', border: '1px solid rgba(224,82,82,0.2)', borderRadius: 5, color: '#f08080', fontSize: 12, padding: '3px 9px', cursor: 'pointer' },
+  btnDeleteBatch: { background: 'rgba(224,82,82,0.12)', border: '1px solid rgba(224,82,82,0.35)', borderRadius: 6, color: '#f08080', fontSize: 12, padding: '5px 12px', cursor: 'pointer', fontWeight: 600 },
+  btnEdit: { background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.25)', borderRadius: 5, fontSize: 13, padding: '3px 8px', cursor: 'pointer' },
   groqTag: { background: '#f0572222', color: '#f05722', border: '1px solid #f0572244', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 },
   geminiTag: { background: '#4285f422', color: '#4285f4', border: '1px solid #4285f444', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 },
   results: { marginTop: '1.25rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '1rem' },
@@ -815,11 +1282,15 @@ const S: Record<string, React.CSSProperties> = {
   errorBanner: { background: 'rgba(224,82,82,0.12)', border: '1px solid rgba(224,82,82,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f08080', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   successBanner: { background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#34d399', marginTop: 12 },
   closeBtn: { background: 'none', border: 'none', color: '#f08080', cursor: 'pointer', fontSize: 14 },
+  coachSection: { background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.2)', borderRadius: 8, padding: '10px', marginBottom: 12 },
+  coachSectionTitle: { fontSize: 11, color: '#8b5cf6', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, marginBottom: 8 },
+  coachRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '6px 4px', borderRadius: 6, flexWrap: 'wrap' },
+  multiSelectBar: { display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, marginBottom: 12, flexWrap: 'wrap' },
   statCard: { background: 'rgba(15,45,20,0.6)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: 12, padding: '1.5rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 },
   statValue: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '2.5rem', color: '#c9a84c', letterSpacing: '0.04em', lineHeight: 1 },
   statLabel: { fontSize: 12, color: '#8a9a8c', textTransform: 'uppercase', letterSpacing: '0.08em' },
   empty: { textAlign: 'center', padding: '3rem', color: '#8a9a8c', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 },
   groupeDetailCard: { background: 'rgba(15,45,20,0.6)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' },
   groupeDetailHeader: { background: 'rgba(201,168,76,0.1)', borderBottom: '1px solid rgba(201,168,76,0.2)', padding: '8px 14px', fontSize: 13, fontWeight: 700, color: '#c9a84c', letterSpacing: '0.06em' },
-  groupeRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)' },
+  groupeRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)', transition: 'background 0.15s' },
 }

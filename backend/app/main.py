@@ -2,7 +2,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.config import settings
-from app.api.routes import auth  # ✅
+from app.api.routes import auth, admin  # ✅ admin branché
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,20 +23,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Health check ──────────────────────────────────────────────────────────────
+# ── Health check ───────────────────────────────────────────────────────────────
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "version": settings.APP_VERSION}
 
-# ── API v1 ────────────────────────────────────────────────────────────────────
+# ── API v1 ─────────────────────────────────────────────────────────────────────
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
-
-# Prochaines phases :
-# from app.api.v1.routes import players, fantasy, admin, pronos, matches
-# api_router.include_router(players.router)
-# api_router.include_router(fantasy.router)
-# api_router.include_router(admin.router)
+api_router.include_router(admin.router)  # ✅ préfixe final : /api/v1/admin/...
 
 app.include_router(api_router)
 

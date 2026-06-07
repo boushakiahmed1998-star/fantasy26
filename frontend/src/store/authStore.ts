@@ -28,13 +28,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   register: async (email, password, username) => {
     set({ loading: true, error: null })
     try {
-      const { data } = await axios.post('/api/auth/register', { email, password, username })
+      // ✅ préfixe corrigé : /api/v1/auth/register
+      const { data } = await axios.post('/api/v1/auth/register', { email, password, username })
       localStorage.setItem('fb_token', data.access_token)
       localStorage.setItem('fb_user', JSON.stringify(data.user))
       axios.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
       set({ user: data.user, token: data.access_token, loading: false })
     } catch (e: any) {
-      set({ error: e.response?.data?.detail || 'Erreur lors de l\'inscription', loading: false })
+      set({ error: e.response?.data?.detail || "Erreur lors de l'inscription", loading: false })
       throw e
     }
   },
@@ -42,7 +43,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (email, password) => {
     set({ loading: true, error: null })
     try {
-      const { data } = await axios.post('/api/auth/login', { email, password })
+      // ✅ préfixe corrigé : /api/v1/auth/login
+      const { data } = await axios.post('/api/v1/auth/login', { email, password })
       localStorage.setItem('fb_token', data.access_token)
       localStorage.setItem('fb_user', JSON.stringify(data.user))
       axios.defaults.headers.common['Authorization'] = `Bearer ${data.access_token}`
@@ -63,6 +65,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   clearError: () => set({ error: null }),
 }))
 
-// Init axios token on app load
+// Initialise le token axios au chargement de l'app
 const token = localStorage.getItem('fb_token')
 if (token) axios.defaults.headers.common['Authorization'] = `Bearer ${token}`

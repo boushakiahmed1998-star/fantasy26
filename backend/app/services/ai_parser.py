@@ -1,16 +1,14 @@
 """
 Service IA — Extraction de joueurs/entraîneurs depuis texte ou image.
-- Texte → Groq (llama-3.1-70b)
-- Image → Gemini Pro Vision (OCR) → structuration JSON
+- Texte → Groq (llama-3.3-70b-versatile)
+- Image → Groq Vision (llama-3.2-11b-vision-preview)
 """
 
 import base64
 import json
 import logging
 import re
-from pathlib import Path
 
-import google.generativeai as genai
 from groq import Groq
 
 from app.config import settings
@@ -75,7 +73,6 @@ Prix estimé entre 4-15M si non précisé. Retourne SEULEMENT le JSON."""
 def _clean_json_response(raw: str) -> str:
     """Nettoie le JSON brut (enlève balises markdown si présentes)."""
     raw = raw.strip()
-    # Enlève ```json ... ``` ou ``` ... ```
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     return raw.strip()
@@ -83,13 +80,13 @@ def _clean_json_response(raw: str) -> str:
 
 def parse_from_text(text: str) -> dict:
     """
-    Envoie le texte à Groq (llama-3.1-70b-versatile) et retourne le JSON structuré.
+    Envoie le texte à Groq (llama-3.3-70b-versatile) et retourne le JSON structuré.
     """
     client = Groq(api_key=settings.GROQ_API_KEY)
 
     try:
         response = client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": f"Voici les données à extraire :\n\n{text}"},
@@ -114,44 +111,52 @@ def parse_from_text(text: str) -> dict:
 
 def parse_from_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict:
     """
-    Envoie l'image à Gemini Pro Vision (OCR) et retourne le JSON structuré.
+    Envoie l'image à Groq Vision (llama-3.2-11b-vision-preview) et retourne le JSON structuré.
     """
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    client = Groq(api_key=settings.GROQ_API_KEY)
 
     try:
-        image_part = {
-            "inline_data": {
-                "mime_type": mime_type,
-                "data": base64.b64encode(image_bytes).decode("utf-8"),
-            }
-        }
+        image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+        image_url = f"data:{mime_type};base64,{image_b64}"
 
-        response = model.generate_content(
-            [VISION_PROMPT, image_part],
-            generation_config=genai.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=4096,
-            ),
+        response = client.chat.completions.create(
+            model="llama-3.2-11b-vision-preview",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image_url},
+                        },
+                        {
+                            "type": "text",
+                            "text": VISION_PROMPT,
+                        },
+                    ],
+                }
+            ],
+            temperature=0.1,
+            max_tokens=4096,
         )
 
-        raw = response.text
+        raw = response.choices[0].message.content
         cleaned = _clean_json_response(raw)
         result = json.loads(cleaned)
-        logger.info(f"Gemini parsed {len(result.get('data', []))} entries from image")
+        logger.info(f"Groq Vision parsed {len(result.get('data', []))} entries from image")
         return result
 
     except json.JSONDecodeError as e:
-        logger.error(f"Gemini JSON parse error: {e}")
-        raise ValueError(f"Gemini a retourné un JSON invalide : {e}")
+        logger.error(f"Groq Vision JSON parse error: {e}")
+        raise ValueError(f"Groq Vision a retourné un JSON invalide : {e}")
     except Exception as e:
-        logger.error(f"Gemini API error: {e}")
-        raise RuntimeError(f"Erreur Gemini : {e}")
+        logger.error(f"Groq Vision API error: {e}")
+        raise RuntimeError(f"Erreur Groq Vision : {e}")
 
 
 def parse_auto(text: str | None = None, image_bytes: bytes | None = None, mime_type: str = "image/jpeg") -> dict:
     """
-    Dispatcher : image → Gemini, texte → Groq.
+    Dispatcher : image → Groq Vision, texte → Groq.
     """
     if image_bytes:
         return parse_from_image(image_bytes, mime_type)

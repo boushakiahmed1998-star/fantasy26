@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
-from core.supabase import get_supabase   # ✅
-from core.security import create_access_token  # ✅
+from core.supabase import get_supabase
+from core.security import create_access_token
 import logging
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -29,6 +29,7 @@ def create_user_profile(user_id: str, email: str, username: str) -> None:
             "email": email,
             "username": username,
             "role": "user",
+            "password_hash": "",   # ✅ Supabase Auth gère les mots de passe — champ inutilisé
         }).execute()
 
 
@@ -74,7 +75,12 @@ async def login(body: LoginRequest):
 
     # Récupérer le profil
     profile = sb.table("users").select("*").eq("id", res.user.id).single().execute()
-    user_data = profile.data or {"id": res.user.id, "email": body.email, "username": body.email.split("@")[0], "role": "user"}
+    user_data = profile.data or {
+        "id": res.user.id,
+        "email": body.email,
+        "username": body.email.split("@")[0],
+        "role": "user",
+    }
 
     # Sync si profil manquant
     if not profile.data:

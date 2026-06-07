@@ -10,7 +10,7 @@ const GROUPES: Record<string, string[]> = {
   'B': ['Canada', 'Qatar', 'Suisse', 'Bosnie-Herzégovine'],
   'C': ['Brésil', 'Maroc', 'Haïti', 'Écosse'],
   'D': ['États-Unis', 'Paraguay', 'Australie', 'Turquie'],
-  'E': ['Allemagne', 'Curaçao', 'Côte d\'Ivoire', 'Équateur'],
+  'E': ['Allemagne', 'Curaçao', "Côte d'Ivoire", 'Équateur'],
   'F': ['Pays-Bas', 'Japon', 'Tunisie', 'Suède'],
   'G': ['Belgique', 'Égypte', 'Iran', 'Nouvelle-Zélande'],
   'H': ['Espagne', 'Cap-Vert', 'Arabie saoudite', 'Uruguay'],
@@ -29,7 +29,7 @@ const FLAG_EMOJIS: Record<string, string> = {
   'Canada': '🇨🇦', 'Qatar': '🇶🇦', 'Suisse': '🇨🇭', 'Bosnie-Herzégovine': '🇧🇦',
   'Brésil': '🇧🇷', 'Maroc': '🇲🇦', 'Haïti': '🇭🇹', 'Écosse': '🏴󠁧󠁢󠁳󠁣󠁴󠁿',
   'États-Unis': '🇺🇸', 'Paraguay': '🇵🇾', 'Australie': '🇦🇺', 'Turquie': '🇹🇷',
-  'Allemagne': '🇩🇪', 'Curaçao': '🇨🇼', 'Côte d\'Ivoire': '🇨🇮', 'Équateur': '🇪🇨',
+  'Allemagne': '🇩🇪', 'Curaçao': '🇨🇼', "Côte d'Ivoire": '🇨🇮', 'Équateur': '🇪🇨',
   'Pays-Bas': '🇳🇱', 'Japon': '🇯🇵', 'Tunisie': '🇹🇳', 'Suède': '🇸🇪',
   'Belgique': '🇧🇪', 'Égypte': '🇪🇬', 'Iran': '🇮🇷', 'Nouvelle-Zélande': '🇳🇿',
   'Espagne': '🇪🇸', 'Cap-Vert': '🇨🇻', 'Arabie saoudite': '🇸🇦', 'Uruguay': '🇺🇾',
@@ -65,7 +65,6 @@ interface ParseResult {
 
 type InputMode = 'text' | 'image' | 'manual'
 type Tab = 'import' | 'players' | 'stats' | 'groupes'
-type MainTab = 'import' | 'manage'
 
 const POSITION_COLORS: Record<string, string> = {
   GK: '#f59e0b', DEF: '#3b82f6', MID: '#10b981', FWD: '#ef4444', COACH: '#8b5cf6',
@@ -106,11 +105,9 @@ export default function Admin() {
     )
   }
 
-  const [mainTab, setMainTab] = useState<MainTab>('import')
   const [tab, setTab] = useState<Tab>('import')
   const [mode, setMode] = useState<InputMode>('text')
 
-  // Nation sélectionnée
   const [selectedNation, setSelectedNation] = useState<string>('')
   const [nationSearch, setNationSearch] = useState('')
   const [showNationPicker, setShowNationPicker] = useState(false)
@@ -129,7 +126,6 @@ export default function Admin() {
   const [dragOver, setDragOver] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  // Joueur manuel
   const [manualPlayer, setManualPlayer] = useState<PlayerEntry>({
     name: '', nationality: '', position: 'FWD', team: '', price: 7,
     age: null, jersey_number: null, _selected: true, _type: 'player',
@@ -155,7 +151,7 @@ export default function Admin() {
   }, [])
 
   const handleParse = async () => {
-    if (!selectedNation) { setError('Sélectionnez une nation d\'abord.'); return }
+    if (!selectedNation) { setError("Sélectionnez une nation d'abord."); return }
     setError(null); setResult(null); setConfirmSuccess(null); setLoading(true)
     try {
       const formData = new FormData()
@@ -170,7 +166,6 @@ export default function Admin() {
       const { data } = await axios.post<ParseResult>('/api/v1/admin/import-players', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      // Forcer la nation sélectionnée
       const fixNation = (p: PlayerEntry) => ({
         ...p,
         nationality: selectedNation,
@@ -185,7 +180,7 @@ export default function Admin() {
     } catch (e: any) {
       const detail = e.response?.data?.detail
       if (detail?.error === 'RULE_VIOLATION') setError(`⚠ ${detail.message}`)
-      else setError(typeof detail === 'string' ? detail : 'Erreur lors de l\'analyse IA')
+      else setError(typeof detail === 'string' ? detail : "Erreur lors de l'analyse IA")
     } finally { setLoading(false) }
   }
 
@@ -230,6 +225,7 @@ export default function Admin() {
   const loadPlayers = async () => {
     try { const { data } = await axios.get('/api/v1/admin/players'); setPlayers(data.players) } catch {}
   }
+
   const loadStats = async () => {
     try { const { data } = await axios.get('/api/v1/admin/stats'); setStats(data) } catch {}
   }
@@ -270,7 +266,7 @@ export default function Admin() {
           <p style={S.subtitle}>Gestion des effectifs · 48 équipes · Coupe du Monde 2026</p>
         </div>
 
-        {/* ── Tabs principaux ── */}
+        {/* ── Tabs ── */}
         <div style={S.tabs}>
           {([
             ['import', '🤖 Import IA'],
@@ -390,7 +386,7 @@ export default function Admin() {
                   <div>
                     <label style={S.label}>Collez l'effectif complet (liste des joueurs)</label>
                     <textarea value={text} onChange={e => setText(e.target.value)}
-                      placeholder={`Exemple :\nGardiens : Raul Rangel (Chivas), Carlos Acevedo\nDéfenseurs : Jorge Sánchez (PAOK)...\nMilieux : Edson Álvarez (Fenerbahçe)...\nAttaquants : Roberto Alvarado...\nEntraîneur : Javier Aguirre`}
+                      placeholder={"Exemple :\nGardiens : Raul Rangel (Chivas), Carlos Acevedo\nDéfenseurs : Jorge Sánchez (PAOK)...\nMilieux : Edson Álvarez (Fenerbahçe)...\nAttaquants : Roberto Alvarado...\nEntraîneur : Javier Aguirre"}
                       style={S.textarea} rows={10} />
                     <button onClick={handleParse}
                       disabled={loading || !text.trim()}
@@ -518,8 +514,8 @@ export default function Admin() {
                       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
                           <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                            {['', 'N°', 'Nom', 'Poste', 'Nationalité', 'Équipe', 'Prix (M€)', 'Âge', ''].map(h => (
-                              <th key={h} style={S.th}>{h}</th>
+                            {['Sél.', 'N°', 'Nom', 'Poste', 'Nationalité', 'Équipe', 'Prix (M€)', 'Âge', 'Sup.'].map((h, i) => (
+                              <th key={i} style={S.th}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -612,11 +608,10 @@ export default function Admin() {
               <button onClick={loadPlayers} style={S.btnMini}>🔄 Actualiser</button>
             </div>
 
-            {/* Filtres par nation */}
             <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {Object.entries(GROUPES).map(([g, equipes]) =>
                 equipes.map(eq => (
-                  <button key={eq} onClick={async () => {
+                  <button key={`${g}-${eq}`} onClick={async () => {
                     try {
                       const { data } = await axios.get(`/api/v1/admin/players?team=${encodeURIComponent(eq)}`)
                       setPlayers(data.players)
@@ -646,8 +641,8 @@ export default function Admin() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-                      {['Nation', 'Nom', 'Poste', 'Prix', 'Âge', ''].map(h => (
-                        <th key={h} style={S.th}>{h}</th>
+                      {['Nation', 'Nom', 'Poste', 'Prix', 'Âge', 'Sup.'].map((h, i) => (
+                        <th key={i} style={S.th}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -776,8 +771,6 @@ const S: Record<string, React.CSSProperties> = {
   cardHeader: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1.25rem', flexWrap: 'wrap', gap: 12 },
   cardTitle: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.3rem', color: '#f5f5f0', letterSpacing: '0.04em', marginBottom: 4 },
   cardSub: { color: '#8a9a8c', fontSize: 13 },
-
-  // Nation selector
   nationCard: { background: 'rgba(15,45,20,0.6)', border: '1px solid rgba(201,168,76,0.2)', borderRadius: 12, padding: '1.5rem' },
   nationCardHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 },
   nationCardTitle: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.1rem', color: '#c9a84c', letterSpacing: '0.04em' },
@@ -793,13 +786,9 @@ const S: Record<string, React.CSSProperties> = {
   groupeCard: { background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '10px', display: 'flex', flexDirection: 'column', gap: 4 },
   groupeCardTitle: { fontSize: 11, color: '#c9a84c', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4, fontWeight: 600 },
   equipeBtn: { background: 'transparent', border: 'none', color: '#f5f5f0', fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: '3px 4px', borderRadius: 4, transition: 'background 0.15s' },
-
-  // Mode toggle
   modeToggle: { display: 'flex', gap: 8, marginBottom: '1.25rem' },
   modeBtn: { flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 16px', color: '#8a9a8c', fontSize: 14, cursor: 'pointer', transition: 'all 0.2s' },
   modeBtnActive: { background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.4)', color: '#c9a84c' },
-
-  // Form
   label: { display: 'block', fontSize: 12, color: '#8a9a8c', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 },
   textarea: { width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '12px 14px', color: '#f5f5f0', fontSize: 14, resize: 'vertical', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 12 },
   input: { width: '100%', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '10px 12px', color: '#f5f5f0', fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' },
@@ -808,13 +797,9 @@ const S: Record<string, React.CSSProperties> = {
   inlineSelect: { background: '#0f2d14', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 5, padding: '4px 6px', color: '#f5f5f0', fontSize: 12, outline: 'none', cursor: 'pointer' },
   manualForm: { background: 'rgba(0,0,0,0.2)', borderRadius: 10, padding: '1rem', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 12 },
   manualGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 },
-
-  // Dropzone
   dropzone: { border: '2px dashed rgba(201,168,76,0.3)', borderRadius: 10, padding: '2rem', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s', minHeight: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.02)', marginBottom: 12 },
   dropzoneActive: { border: '2px dashed #c9a84c', background: 'rgba(201,168,76,0.06)' },
   removeImg: { background: 'rgba(224,82,82,0.15)', border: '1px solid rgba(224,82,82,0.3)', borderRadius: 6, color: '#f08080', fontSize: 12, padding: '4px 12px', cursor: 'pointer' },
-
-  // Buttons
   btnGold: { background: '#c9a84c', color: '#0a1f0e', fontFamily: "'Bebas Neue', sans-serif", fontSize: '1rem', letterSpacing: '0.1em', border: 'none', borderRadius: 8, padding: '12px 24px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 },
   btnDisabled: { opacity: 0.5, cursor: 'not-allowed' },
   btnConfirm: { background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff', fontFamily: "'Bebas Neue', sans-serif", fontSize: '1rem', letterSpacing: '0.08em', border: 'none', borderRadius: 8, padding: '11px 24px', cursor: 'pointer' },
@@ -822,26 +807,18 @@ const S: Record<string, React.CSSProperties> = {
   btnDelete: { background: 'rgba(224,82,82,0.1)', border: '1px solid rgba(224,82,82,0.2)', borderRadius: 5, color: '#f08080', fontSize: 12, padding: '3px 9px', cursor: 'pointer' },
   groqTag: { background: '#f0572222', color: '#f05722', border: '1px solid #f0572244', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 },
   geminiTag: { background: '#4285f422', color: '#4285f4', border: '1px solid #4285f444', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600 },
-
-  // Results
   results: { marginTop: '1.25rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '1rem' },
   resultsHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, flexWrap: 'wrap', gap: 8 },
   warningChip: { background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 4, padding: '2px 8px', fontSize: 11, color: '#f59e0b' },
   th: { padding: '8px 10px', textAlign: 'left', fontSize: 11, color: '#8a9a8c', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 500 },
   td: { padding: '8px 10px', fontSize: 14, color: '#f5f5f0' },
-
-  // Messages
   errorBanner: { background: 'rgba(224,82,82,0.12)', border: '1px solid rgba(224,82,82,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f08080', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 },
   successBanner: { background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#34d399', marginTop: 12 },
   closeBtn: { background: 'none', border: 'none', color: '#f08080', cursor: 'pointer', fontSize: 14 },
-
-  // Stats
   statCard: { background: 'rgba(15,45,20,0.6)', border: '1px solid rgba(201,168,76,0.15)', borderRadius: 12, padding: '1.5rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 },
   statValue: { fontFamily: "'Bebas Neue', sans-serif", fontSize: '2.5rem', color: '#c9a84c', letterSpacing: '0.04em', lineHeight: 1 },
   statLabel: { fontSize: 12, color: '#8a9a8c', textTransform: 'uppercase', letterSpacing: '0.08em' },
   empty: { textAlign: 'center', padding: '3rem', color: '#8a9a8c', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 },
-
-  // Groupes
   groupeDetailCard: { background: 'rgba(15,45,20,0.6)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, overflow: 'hidden' },
   groupeDetailHeader: { background: 'rgba(201,168,76,0.1)', borderBottom: '1px solid rgba(201,168,76,0.2)', padding: '8px 14px', fontSize: 13, fontWeight: 700, color: '#c9a84c', letterSpacing: '0.06em' },
   groupeRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)' },

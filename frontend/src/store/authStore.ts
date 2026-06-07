@@ -19,16 +19,21 @@ interface AuthState {
   clearError: () => void
 }
 
+// ── Initialisation immédiate du header au chargement ──────────────────────────
+const storedToken = localStorage.getItem('fb_token')
+if (storedToken) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: JSON.parse(localStorage.getItem('fb_user') || 'null'),
-  token: localStorage.getItem('fb_token'),
+  token: storedToken,
   loading: false,
   error: null,
 
   register: async (email, password, username) => {
     set({ loading: true, error: null })
     try {
-      // ✅ préfixe corrigé : /api/v1/auth/register
       const { data } = await axios.post('/api/v1/auth/register', { email, password, username })
       localStorage.setItem('fb_token', data.access_token)
       localStorage.setItem('fb_user', JSON.stringify(data.user))
@@ -43,7 +48,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   login: async (email, password) => {
     set({ loading: true, error: null })
     try {
-      // ✅ préfixe corrigé : /api/v1/auth/login
       const { data } = await axios.post('/api/v1/auth/login', { email, password })
       localStorage.setItem('fb_token', data.access_token)
       localStorage.setItem('fb_user', JSON.stringify(data.user))
@@ -65,8 +69,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   clearError: () => set({ error: null }),
 }))
 
+// ── Intercepteur de secours (si defaults pas encore propagés) ─────────────────
 axios.interceptors.request.use((config) => {
   const t = localStorage.getItem('fb_token')
-  if (t) config.headers['Authorization'] = `Bearer ${t}`
+  if (t && !config.headers['Authorization']) {
+    config.headers['Authorization'] = `Bearer ${t}`
+  }
   return config
 })

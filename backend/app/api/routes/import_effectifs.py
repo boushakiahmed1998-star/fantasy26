@@ -384,7 +384,7 @@ EFFECTIFS = {
         p("Sofyan Amrabat",       "Maroc", "MID", 7.0),
         p("Azzedine Ounahi",      "Maroc", "MID", 6.0),
         p("Bilal El Khannouss",   "Maroc", "MID", 7.5),
-        p("Ismael Saibari",       "Maroc", "MID", 6.5),
+        p("Ismacel Saibari",       "Maroc", "MID", 6.5),
         p("Abdessamad Ezzalzouli","Maroc", "FWD", 6.5),
         p("Chemsdine Talbi",      "Maroc", "FWD", 5.0),
         p("Soufiane Rahimi",      "Maroc", "FWD", 6.0),

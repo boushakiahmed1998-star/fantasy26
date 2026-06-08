@@ -63,3 +63,60 @@ Défenseurs : Hashmi Hussein (Al Arabi), Ayoub Alawi (Al Gharafa), Boualem Khouk
 Milieux de terrain : Mohammed Al-Manai (Al Shamal), Jassem Jaber (Al Arabi), Karim Boudiaf (Al-Duhail), Ahmed Fathi (Al Arabi), Abdulaziz Hatem (Al Rayyan), Assim Madibo (Al-Wakrah)
 
 Attaquants : Tahseen Mohammed (Al-Duhail), Edmilson Junior (Al-Duhail), Almoez Ali (Al-Duhail), Akram Afif (Al-Sadd), Mohammed Muntari (Al Gharafa), Youssef Abdulrazzaq (Al-Wakrah), Ahmed Alaa (Al Rayyan), Hassan Al-Haydos (Al-Sadd), Ahmed Al-Janahi (Al Gharafa)
+
+Full list of 2026 World Cup coaches by country
+Host nations
+Canada — Jesse Marsch
+Mexico — Javier Aguirre
+United States — Mauricio Pochettino
+South America (CONMEBOL)
+Argentina — Lionel Scaloni
+Brazil — Carlo Ancelotti
+Colombia — Nestor Lorenzo
+Ecuador — Sebastian Beccacece
+Paraguay — Gustavo Alfaro
+Uruguay — Marcelo Bielsa
+North America, Central America and Caribbean (CONCACAF)
+Curaçao — Dick Advocaat
+Haiti — Sebastien Migne
+Panama — Thomas Christiansen
+Oceania (OFC)
+New Zealand — Darren Bazeley
+Europe (UEFA)
+Austria — Ralf Rangnick
+Belgium — Rudi Garcia
+Bosnia and Herzegovina — Sergej Barbarez
+Croatia — Zlatko Dalic
+Czechia — Miroslav Koubek
+England — Thomas Tuchel
+France — Didier Deschamps
+Germany — Julian Nagelsmann
+Netherlands — Ronald Koeman
+Norway — Stale Solbakken
+Portugal — Roberto Martinez
+Scotland — Steve Clarke
+Spain — Luis de la Fuente
+Sweden — Graham Potter
+Switzerland — Murat Yakin
+Türkiye — Vincenzo Montella
+Africa (CAF)
+Algeria — Vladimir Petkovic
+Cape Verde — Bubista
+Côte d’Ivoire — Emerse Fae
+DR Congo — Sebastien Desabre
+Egypt — Hossam Hassan
+Ghana — Carlos Queiroz
+Morocco — Mohamed Ouahbi
+Senegal — Pape Thiaw
+South Africa — Hugo Broos
+Tunisia — Sabri Lamouchi
+Asia (AFC)
+Australia — Tony Popovic
+Iraq — Graham Arnold
+Iran — Amir Ghalenoei
+Japan — Hajime Moriyasu
+Jordan — Jamal Sellami
+Qatar — Julen Lopetegui
+Saudi Arabia — Georgios Donis
+South Korea — Hong Myung-bo
+Uzbekistan — Fabio Cannavaro

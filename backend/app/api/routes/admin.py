@@ -157,7 +157,7 @@ async def confirm_import(
                     "nationality": p.nationality,
                     "position": p.position,
                     "team": p.team,
-                    "price": p.price,
+                    "price": float(p.price),
                     "stats": {"age": p.age, "jersey_number": p.jersey_number},
                 }
             ).execute()
@@ -186,7 +186,7 @@ async def confirm_import(
                     "name": c.name,
                     "nationality": c.nationality,
                     "team": c.team,
-                    "price": c.price,
+                    "price": float(p.price),
                     "forbidden_players_nationality": [c.nationality],
                 }
             ).execute()

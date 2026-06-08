@@ -16,9 +16,9 @@ import time
 
 # ── CONFIG ─────────────────────────────────────────────────────────────────────
 API_BASE   = "http://localhost:8000"
-ADMIN_TOKEN = "REMPLACE_PAR_TON_TOKEN"   # ← copie la valeur de localStorage.fb_token
+ADMIN_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhY2U1OWNhMy05OWExLTRhODYtOTJiOS03ODVmYjE0NTliZmIiLCJlbWFpbCI6ImFkbWluQGZhbnRhc3kyNi5jb20iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3ODA5MDc0ODJ9.aswQqggqnCl5_ZtxOXgJkEoZFYx-pCakMWqGJC7_F0o"   # ← copie la valeur de localStorage.fb_token
 # ──────────────────────────────────────────────────────────────────────────────
-
+1111
 HEADERS = {
     "Authorization": f"Bearer {ADMIN_TOKEN}",
     "Content-Type": "application/json",
@@ -27,7 +27,12 @@ HEADERS = {
 def p(name, nat, pos, price=6.5):
     """Crée une entrée joueur."""
     return {"name": name, "nationality": nat, "position": pos,
-            "team": nat, "price": price, "age": None, "jersey_number": None}
+            "team": nat, "price": int(round(price)), "age": None, "jersey_number": None}
+
+def c(name, nat, price=6.5):
+    """Crée une entrée entraîneur."""
+    return {"name": name, "nationality": nat, "team": nat,
+            "price": int(round(price)), "age": None}
 
 def c(name, nat, price=6.5):
     """Crée une entrée entraîneur."""

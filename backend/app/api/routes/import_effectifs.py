@@ -16,7 +16,7 @@ import time
 
 # ── CONFIG ─────────────────────────────────────────────────────────────────────
 API_BASE   = "http://localhost:8000"
-ADMIN_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhY2U1OWNhMy05OWExLTRhODYtOTJiOS03ODVmYjE0NTliZmIiLCJlbWFpbCI6ImFkbWluQGZhbnRhc3kyNi5jb20iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3ODA5MDc0ODJ9.aswQqggqnCl5_ZtxOXgJkEoZFYx-pCakMWqGJC7_F0o"   # ← copie la valeur de localStorage.fb_token
+ADMIN_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhY2U1OWNhMy05OWExLTRhODYtOTJiOS03ODVmYjE0NTliZmIiLCJlbWFpbCI6ImFkbWluQGZhbnRhc3kyNi5jb20iLCJyb2xlIjoiYWRtaW4iLCJleHAiOjE3ODA5MjQyMDl9.6BsI5vJ1og-jVAMLHFYq-7LfabALUIqFaN_P2q2Ncfw"   # ← copie la valeur de localStorage.fb_token
 # ──────────────────────────────────────────────────────────────────────────────
 1111
 HEADERS = {
@@ -322,7 +322,9 @@ EFFECTIFS = {
         p("Cedric Itten",      "Suisse", "FWD", 6.0),
         p("Johan Manzambi",    "Suisse", "FWD", 5.5),
     ],
-    "coaches": [],
+    "coaches": [ 
+        c("Murat Yakin", "Suisse", 6.5),
+        ],
 },
 
 # ────────────────────────── GROUPE C ─────────────────────────────────────────
@@ -356,7 +358,9 @@ EFFECTIFS = {
         p("Endrick",           "Brésil", "FWD", 8.5),
         p("Rayan",             "Brésil", "FWD", 7.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Carlo Ancelotti", "Brésil", 8.5),
+    ],
 },
 
 "Maroc": {
@@ -389,7 +393,9 @@ EFFECTIFS = {
         p("Yassine Gessime",      "Maroc", "FWD", 6.0),
         p("Ayoube Amaimouni",     "Maroc", "FWD", 6.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Mohamed Ouahbi", "Maroc", 6.0),
+    ],
 },
 
 "Haïti": {
@@ -422,7 +428,9 @@ EFFECTIFS = {
         p("Yassin Fortune",         "Haïti", "FWD", 5.0),
         p("Lenny Joseph",           "Haïti", "FWD", 5.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Dennis Amissah", "Haïti", 5.0),
+    ],
 },
 
 "Écosse": {
@@ -455,7 +463,9 @@ EFFECTIFS = {
         p("Lawrence Shankland","Écosse", "FWD", 7.5),
         p("Ross Stewart",      "Écosse", "FWD", 6.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Steve Clarke", "Écosse", 5.0),
+    ],
 },
 
 # ────────────────────────── GROUPE D ─────────────────────────────────────────
@@ -489,7 +499,9 @@ EFFECTIFS = {
         p("Haji Wright",        "États-Unis", "FWD", 6.5),
         p("Alejandro Zendejas", "États-Unis", "FWD", 6.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Mauricio Pochettino", "États-Unis", 6.0),
+    ],
 },
 
 "Paraguay": {
@@ -522,7 +534,9 @@ EFFECTIFS = {
         p("Isidro Pitta",       "Paraguay", "FWD", 6.5),
         p("Gustavo Caballero",  "Paraguay", "FWD", 5.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Gustavo Morínigo", "Paraguay", 4.0),
+    ],
 },
 
 "Australie": {
@@ -555,7 +569,9 @@ EFFECTIFS = {
         p("Christian Volpato",   "Australie", "FWD", 6.5),
         p("Tete Yengi",          "Australie", "FWD", 5.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Tony Popovic", "Australie", 4.0),
+    ],
 },
 
 "Turquie": {
@@ -588,7 +604,9 @@ EFFECTIFS = {
         p("Oğuz Aydın",           "Turquie", "FWD", 6.5),
         p("Yunus Akgün",          "Turquie", "FWD", 7.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Vincenzo Montella", "Turquie", 6.0),
+    ],
 },
 
 # ────────────────────────── GROUPE E ─────────────────────────────────────────
@@ -622,7 +640,9 @@ EFFECTIFS = {
         p("Denis Undav",       "Allemagne", "FWD", 7.5),
         p("Nick Woltemade",    "Allemagne", "FWD", 6.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Julian Nagelsmann", "Allemagne", 7.0),
+    ],
 },
 
 "Curaçao": {
@@ -655,7 +675,10 @@ EFFECTIFS = {
         p("Jürgen Locadia",      "Curaçao", "FWD", 6.0),
         p("Jearl Margaritha",    "Curaçao", "FWD", 5.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Dick Advocaat", "Curaçao", 4.0),
+
+    ],
 },
 
 "Côte d'Ivoire": {
@@ -688,7 +711,9 @@ EFFECTIFS = {
         p("Bazoumana Touré",    "Côte d'Ivoire", "FWD", 6.0),
         p("Elye Wahi",          "Côte d'Ivoire", "FWD", 8.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Emerse Fae", "Côte d'Ivoire", 5.0),
+    ],
 },
 
 "Équateur": {
@@ -721,7 +746,9 @@ EFFECTIFS = {
         p("John Yeboah",        "Équateur", "FWD", 6.0),
         p("Nilson Angulo",      "Équateur", "FWD", 6.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Sebastian Beccacece", "Équateur", 6.5),
+    ],
 },
 
 # ────────────────────────── GROUPE F ─────────────────────────────────────────
@@ -755,7 +782,10 @@ EFFECTIFS = {
         p("Crysencio Summerville","Pays-Bas","FWD", 8.5),
         p("Wout Weghorst",       "Pays-Bas", "FWD", 7.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Ronald Koeman", "Pays-Bas", 6.0),
+    ],
+
 },
 
 "Japon": {
@@ -788,7 +818,9 @@ EFFECTIFS = {
         p("Shiogai Kento",      "Japon", "FWD", 7.0),
         p("Goto Keisuke",       "Japon", "FWD", 6.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Hajime Moriyasu", "Japon", 5.0),
+    ],
 },
 
 "Suède": {
@@ -821,7 +853,9 @@ EFFECTIFS = {
         p("Benjamin Nygren",         "Suède", "FWD", 6.5),
         p("Ken Sema",                "Suède", "FWD", 6.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Graham Potter", "Suède", 4.0),
+    ],
 },
 
 "Tunisie": {
@@ -854,7 +888,9 @@ EFFECTIFS = {
         p("Elias Saad",             "Tunisie", "FWD", 6.5),
         p("Sebastian Tounekti",     "Tunisie", "FWD", 6.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Sabri Lamouchi", "Tunisie", 4.0),
+    ],
 },
 
 # ────────────────────────── GROUPE G ─────────────────────────────────────────
@@ -888,7 +924,9 @@ EFFECTIFS = {
         p("Alexis Saelemaekers",    "Belgique", "FWD", 8.5),
         p("Leandro Trossard",       "Belgique", "FWD", 9.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Rudi Garcia", "Belgique", 6.0),
+    ],
 },
 
 "Égypte": {
@@ -921,7 +959,9 @@ EFFECTIFS = {
         p("Aqtay Abdallah",       "Égypte", "FWD", 5.0),
         p("Hamza Abdelkarim",     "Égypte", "FWD", 6.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Hossam Hassan", "Égypte", 5.0),
+    ],
 },
 
 "Iran": {
@@ -954,7 +994,9 @@ EFFECTIFS = {
         p("Mehdi Taremi",             "Iran", "FWD", 10.5),
         p("Shahriyar Moghanlou",      "Iran", "FWD", 5.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Amir Ghalenoei", "Iran", 4.5),
+    ],
 },
 
 "Nouvelle-Zélande": {
@@ -987,7 +1029,9 @@ EFFECTIFS = {
         p("Callum McCowatt",     "Nouvelle-Zélande", "FWD", 5.5),
         p("Jesse Randall",       "Nouvelle-Zélande", "FWD", 5.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Darren Bazeley", "Nouvelle-Zélande", 5.5),
+    ],
 },
 
 # ────────────────────────── GROUPE H ─────────────────────────────────────────
@@ -1021,7 +1065,9 @@ EFFECTIFS = {
         p("Víctor Muñoz",        "Espagne", "FWD", 6.5),
         p("Lamine Yamal",        "Espagne", "FWD", 12.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Luis de la Fuente", "Espagne", 7.0),
+    ],
 },
 
 "Cap-Vert": {
@@ -1054,7 +1100,9 @@ EFFECTIFS = {
         p("Gilson Benchimol",   "Cap-Vert", "FWD", 5.5),
         p("Hélio Varela",       "Cap-Vert", "FWD", 5.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Bubista", "Cap-Vert", 4.0),
+    ],
 },
 
 "Arabie saoudite": {
@@ -1087,7 +1135,9 @@ EFFECTIFS = {
         p("Feras Al Brikan",       "Arabie saoudite", "FWD", 7.0),
         p("Saleh Al Shehri",       "Arabie saoudite", "FWD", 7.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Georgios Donis", "Arabie saoudite", 4.0),
+    ],
 },
 
 "Uruguay": {
@@ -1120,7 +1170,9 @@ EFFECTIFS = {
         p("Federico Viñas",        "Uruguay", "FWD", 6.5),
         p("Darwin Núñez",          "Uruguay", "FWD", 11.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Marcelo Bielsa", "Uruguay", 6.0),
+    ],
 },
 
 # ────────────────────────── GROUPE I ─────────────────────────────────────────
@@ -1154,7 +1206,9 @@ EFFECTIFS = {
         p("Marcus Thuram",         "France", "FWD", 10.5),
         p("Jean-Philippe Mateta",  "France", "FWD", 8.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Didier Deschamps", "France", 7.0),
+    ],
 },
 
 "Sénégal": {
@@ -1187,7 +1241,9 @@ EFFECTIFS = {
         p("Bamba Dieng",          "Sénégal", "FWD", 7.0),
         p("Chérif Ndiaye",        "Sénégal", "FWD", 6.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Pape Thiaw", "Sénégal", 5.0),
+    ],
 },
 
 "Norvège": {
@@ -1220,7 +1276,9 @@ EFFECTIFS = {
         p("Oscar Bobb",              "Norvège", "FWD", 8.0),
         p("Antonio Nusa",            "Norvège", "FWD", 8.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Ståle Solbakken", "Norvège", 5.0),
+    ],
 },
 
 "Irak": {
@@ -1253,7 +1311,9 @@ EFFECTIFS = {
         p("Aymen Hussein",     "Irak", "FWD", 6.5),
         p("Mohanad Ali",       "Irak", "FWD", 6.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Graham Arnold", "Irak", 4.5),
+    ],
 },
 
 # ────────────────────────── GROUPE J ─────────────────────────────────────────
@@ -1287,7 +1347,9 @@ EFFECTIFS = {
         p("José Manuel López",   "Argentine", "FWD", 7.0),
         p("Julián Álvarez",      "Argentine", "FWD", 11.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Lionel Scaloni", "Argentine", 7.0),
+    ],
 },
 
 "Algérie": {
@@ -1320,7 +1382,9 @@ EFFECTIFS = {
         p("Anis Hadj Moussa",     "Algérie", "FWD", 8.5),
         p("Riyad Mahrez",         "Algérie", "FWD", 11.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Vladimir Petkovic", "Algérie", 4.5),
+    ],
 },
 
 "Autriche": {
@@ -1353,7 +1417,9 @@ EFFECTIFS = {
         p("Michael Gregoritsch",    "Autriche", "FWD", 8.0),
         p("Sasa Kalajdzic",         "Autriche", "FWD", 7.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Ralf Rangnick", "Autriche", 5.0),
+    ],
 },
 
 "Jordanie": {
@@ -1386,7 +1452,9 @@ EFFECTIFS = {
         p("Ali Olwan",            "Jordanie", "FWD", 5.5),
         p("Ibrahim Sabra",        "Jordanie", "FWD", 6.0),
     ],
-    "coaches": [],
+    "coaches": [
+         c("Jamal Sellami", "Jordanie", 4.0),
+    ],
 },
 
 # ────────────────────────── GROUPE K ─────────────────────────────────────────
@@ -1420,7 +1488,9 @@ EFFECTIFS = {
         p("Gonçalo Ramos",        "Portugal", "FWD", 10.0),
         p("Cristiano Ronaldo",    "Portugal", "FWD", 11.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Roberto Martinez", "Portugal", 7.0),
+    ],
 },
 
 "RD Congo": {
@@ -1453,7 +1523,9 @@ EFFECTIFS = {
         p("Simon Banza",           "RD Congo", "FWD", 8.5),
         p("Yoane Wissa",           "RD Congo", "FWD", 9.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Sebastien Desabre", "RD Congo", 4.0),
+    ],
 },
 
 "Ouzbékistan": {
@@ -1486,7 +1558,9 @@ EFFECTIFS = {
         p("Igor Sergeev",          "Ouzbékistan", "FWD", 7.0),
         p("Azizbek Amonov",        "Ouzbékistan", "FWD", 6.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Fabio Cannavaro", "Ouzbékistan", 4.0),
+    ],
 },
 
 "Colombie": {
@@ -1516,7 +1590,9 @@ EFFECTIFS = {
         p("Juan Camilo Hernández", "Colombie", "FWD", 9.0),
         p("Jhon Arias",            "Colombie", "FWD", 8.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Néstor Lorenzo", "Colombie", 5.0),
+    ],
 },
 
 # ────────────────────────── GROUPE L ─────────────────────────────────────────
@@ -1550,7 +1626,9 @@ EFFECTIFS = {
         p("Marcus Rashford",      "Angleterre", "FWD", 9.0),
         p("Anthony Gordon",       "Angleterre", "FWD", 8.5),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Thomas Tuchel", "Angleterre", 7.0),
+    ],
 },
 
 "Croatie": {
@@ -1583,7 +1661,9 @@ EFFECTIFS = {
         p("Petar Musa",          "Croatie", "FWD", 7.5),
         p("Igor Matanovic",      "Croatie", "FWD", 7.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Zlatko Dalić", "Croatie", 6.0),
+    ],
 },
 
 "Ghana": {
@@ -1616,7 +1696,9 @@ EFFECTIFS = {
         p("Iñaki Williams",       "Ghana", "FWD", 9.5),
         p("Jordan Ayew",          "Ghana", "FWD", 8.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Carlos Queiroz", "Ghana", 4.0),
+    ],
 },
 
 "Panama": {
@@ -1649,7 +1731,9 @@ EFFECTIFS = {
         p("José Fajardo",          "Panama", "FWD", 7.0),
         p("Tomás Rodríguez",       "Panama", "FWD", 7.0),
     ],
-    "coaches": [],
+    "coaches": [
+        c("Thomas Christiansen", "Panama", 4.0),
+    ],
 },
 
 }  # fin EFFECTIFS

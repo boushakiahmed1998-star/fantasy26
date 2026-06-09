@@ -105,6 +105,44 @@ async def login(body: LoginRequest):
     }
 
 
+@router.post("/refresh")
+async def refresh_token():
+    """
+    Renouvelle le token JWT sans demander les credentials.
+    Utilise la session Supabase active côté serveur.
+    Si la session Supabase est expirée, retourne 401 → le front redirige vers /login.
+    """
+    sb = get_supabase()
+    try:
+        session = sb.auth.get_session()
+        if not session or not session.user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session expirée, veuillez vous reconnecter"
+            )
+
+        user_id = session.user.id
+        email = session.user.email or ""
+
+        # Récupérer le rôle depuis notre table users
+        profile = sb.table("users").select("role").eq("id", user_id).single().execute()
+        role = profile.data.get("role", "user") if profile.data else "user"
+
+        new_token = create_access_token(user_id, email, role)
+        logger.info(f"Token refreshed for user {user_id}")
+
+        return {"access_token": new_token, "token_type": "bearer"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"refresh_token error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Impossible de renouveler le token"
+        )
+
+
 @router.get("/me")
 async def me(user_id: str, email: str):
     sb = get_supabase()

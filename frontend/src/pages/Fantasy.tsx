@@ -156,6 +156,9 @@ export default function Fantasy() {
   const [fetching, setFetching] = useState(true)
 
   useEffect(() => {
+  // Attendre que le token soit dispo avant de charger
+  const token = localStorage.getItem('fb_token')
+  if (!token) return  // ProtectedRoute gère la redirection
     loadTeam()
     Promise.all([
       axios.get('/api/v1/players').then(r => setAllPlayers(r.data.players || [])),

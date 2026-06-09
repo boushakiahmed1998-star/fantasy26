@@ -78,23 +78,111 @@ axios.interceptors.request.use((config) => {
   return config
 })
 
-// ── Intercepteur : token expiré → déconnexion propre ─────────────────────────
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Ne pas rediriger si on est déjà sur /login ou /register
-      const isAuthRoute = window.location.pathname === '/login' ||
-                          window.location.pathname === '/register'
+// ── Intercepteur : refresh automatique du token expiré ───────────────────────
+//
+//  Pattern "queue + retry" :
+//  1. Une requête reçoit un 401 → on tente /auth/refresh
+//  2. Toutes les requêtes qui arrivent pendant le refresh sont mises en file
+//  3. Si le refresh réussit → on rejoue toutes les requêtes en file avec le
+//     nouveau token
+//  4. Si le refresh échoue (session Supabase expirée) → déconnexion propre
+//     et redirection vers /login
+//
+let isRefreshing = false
+let failedQueue: Array<{
+  resolve: (token: string) => void
+  reject: (error: any) => void
+}> = []
 
-      if (!isAuthRoute) {
-        localStorage.removeItem('fb_token')
-        localStorage.removeItem('fb_user')
-        delete axios.defaults.headers.common['Authorization']
-        // Petite pause pour laisser le store se vider avant la redirection
-        setTimeout(() => { window.location.href = '/login' }, 100)
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error)
+    } else {
+      resolve(token as string)
+    }
+  })
+  failedQueue = []
+}
+
+const forceLogout = () => {
+  localStorage.removeItem('fb_token')
+  localStorage.removeItem('fb_user')
+  delete axios.defaults.headers.common['Authorization']
+  useAuthStore.setState({ user: null, token: null })
+
+  const isAuthRoute =
+    window.location.pathname === '/login' ||
+    window.location.pathname === '/register'
+
+  if (!isAuthRoute) {
+    setTimeout(() => {
+      window.location.href = '/login'
+    }, 100)
+  }
+}
+
+axios.interceptors.response.use(
+  // Réponses OK → on laisse passer
+  (response) => response,
+
+  async (error) => {
+    const originalRequest = error.config
+
+    // On ne tente le refresh que si :
+    // - c'est un 401
+    // - on n'a pas déjà retried cette requête
+    // - ce n'est pas l'endpoint refresh lui-même (évite la boucle infinie)
+    if (
+      error.response?.status === 401 &&
+      !originalRequest._retry &&
+      !originalRequest.url?.includes('/auth/refresh')
+    ) {
+      // Si un refresh est déjà en cours, on met en file d'attente
+      if (isRefreshing) {
+        return new Promise<string>((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        })
+          .then((newToken) => {
+            originalRequest.headers['Authorization'] = `Bearer ${newToken}`
+            return axios(originalRequest)
+          })
+          .catch((err) => Promise.reject(err))
+      }
+
+      // Premier 401 → on lance le refresh
+      originalRequest._retry = true
+      isRefreshing = true
+
+      try {
+        console.log('[auth] Token expiré, tentative de refresh...')
+        const { data } = await axios.post('/api/v1/auth/refresh')
+        const newToken: string = data.access_token
+
+        // Mettre à jour partout
+        localStorage.setItem('fb_token', newToken)
+        axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`
+        useAuthStore.setState((s) => ({ ...s, token: newToken }))
+
+        console.log('[auth] Token refreshé avec succès ✓')
+
+        // Débloquer toutes les requêtes en attente
+        processQueue(null, newToken)
+
+        // Rejouer la requête originale avec le nouveau token
+        originalRequest.headers['Authorization'] = `Bearer ${newToken}`
+        return axios(originalRequest)
+      } catch (refreshError: any) {
+        // Le refresh a échoué → session vraiment expirée
+        console.warn('[auth] Refresh échoué, déconnexion forcée')
+        processQueue(refreshError, null)
+        forceLogout()
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
       }
     }
+
     return Promise.reject(error)
   }
 )

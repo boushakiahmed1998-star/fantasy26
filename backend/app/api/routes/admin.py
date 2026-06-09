@@ -19,6 +19,7 @@ from pydantic import BaseModel
 
 from app.services.ai_parser import parse_auto
 from app.services.rules_validator import RuleViolation, validate_import_batch
+from app.services.sync import invalidate_players
 from core.security import require_admin
 from core.supabase import get_supabase
 
@@ -195,8 +196,8 @@ async def confirm_import(
         except Exception as e:
             logger.error(f"Error inserting coach {c.name}: {e}")
             errors.append(f"Entraîneur {c.name}: {str(e)[:100]}")
-            
-invalidate_players()
+
+    invalidate_players()
 
     return {
         "success": True,

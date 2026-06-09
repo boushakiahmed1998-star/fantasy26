@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
+import Fantasy from './pages/Fantasy'
 import Admin from './pages/Admin'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
@@ -14,16 +15,26 @@ function App() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
         <Route path="/dashboard" element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
+          <ProtectedRoute><Dashboard /></ProtectedRoute>
         } />
+
+        {/* Phase 3 — Fantasy builder */}
+        <Route path="/fantasy" element={
+          <ProtectedRoute><Fantasy /></ProtectedRoute>
+        } />
+
+        {/* Admin panel */}
         <Route path="/admin" element={
-          <AdminRoute>
-            <Admin />
-          </AdminRoute>
+          <AdminRoute><Admin /></AdminRoute>
         } />
+
+        {/* Phase 5 — à venir */}
+        {/* <Route path="/pronos"  element={<ProtectedRoute><Pronos /></ProtectedRoute>} /> */}
+        {/* <Route path="/ranking" element={<ProtectedRoute><Ranking /></ProtectedRoute>} /> */}
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   )

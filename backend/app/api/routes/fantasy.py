@@ -1,9 +1,3 @@
-"""
-Routes Fantasy League — Fantasy Boulzazen
-GET  /api/v1/fantasy/my-team  → charge l'équipe de l'utilisateur
-POST /api/v1/fantasy/save     → sauvegarde l'équipe (validation complète)
-POST /api/v1/fantasy/auto-fill→ génère une équipe auto (preview, sans sauvegarder)
-"""
 import logging
 from typing import Optional, Dict
 
@@ -12,7 +6,7 @@ from pydantic import BaseModel
 
 from app.services.auto_fill import auto_fill_team
 from app.services.rules_validator import RuleViolation, validate_fantasy_team
-from backend.app.services.sync import invalidate_user
+from app.services.sync import invalidate_user
 from core.security import get_current_user
 from core.supabase import get_supabase
 
@@ -177,13 +171,12 @@ async def save_team(body: SaveTeamRequest, user=Depends(get_current_user)):
 
     logger.info(f"Team saved for user {user['sub']} — budget_used={budget_used}")
 
-     invalidate_user(user["sub"])
+    invalidate_user(user["sub"])
 
     return {
         "success": True,
         "budget_used": budget_used,
         "team_id": res.data[0]["id"] if res.data else None,
-        
     }
 
 
@@ -217,5 +210,3 @@ async def auto_fill(body: AutoFillRequest, user=Depends(get_current_user)):
             detail=f"Pas assez de joueurs disponibles : {result['players_found']}/{result['players_needed']}. "
                    "Importez plus de joueurs via le panneau Admin.",
         )
-
-    return result

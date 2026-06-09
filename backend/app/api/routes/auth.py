@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr
 from core.supabase import get_supabase
 from core.security import create_access_token
 import logging
+import threading
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ def create_user_profile(user_id: str, email: str, username: str) -> None:
             "email": email,
             "username": username,
             "role": "user",
-            "password_hash": "",   # ✅ Supabase Auth gère les mots de passe — champ inutilisé
+            "password_hash": "",
         }).execute()
 
 
@@ -38,7 +39,6 @@ async def register(body: RegisterRequest):
     sb = get_supabase()
     username = body.username or body.email.split("@")[0]
 
-    # Vérifier username unique
     existing = sb.table("users").select("id").eq("username", username).execute()
     if existing.data:
         raise HTTPException(status_code=400, detail="Ce nom d'utilisateur est déjà pris")
@@ -73,7 +73,6 @@ async def login(body: LoginRequest):
     if not res.user:
         raise HTTPException(status_code=401, detail="Email ou mot de passe incorrect")
 
-    # Récupérer le profil
     profile = sb.table("users").select("*").eq("id", res.user.id).single().execute()
     user_data = profile.data or {
         "id": res.user.id,
@@ -82,11 +81,17 @@ async def login(body: LoginRequest):
         "role": "user",
     }
 
-    # Sync si profil manquant
     if not profile.data:
         create_user_profile(res.user.id, body.email, body.email.split("@")[0])
 
     token = create_access_token(res.user.id, body.email, user_data.get("role", "user"))
+
+    # Hook post-login : pré-chargement cache Redis (non-bloquant)
+    try:
+        from app.services.sync import on_user_login
+        threading.Thread(target=on_user_login, args=(res.user.id,), daemon=True).start()
+    except Exception as e:
+        logger.debug(f"sync hook skipped: {e}")
 
     return {
         "access_token": token,
@@ -102,7 +107,6 @@ async def login(body: LoginRequest):
 
 @router.get("/me")
 async def me(user_id: str, email: str):
-    """Retourne le profil de l'utilisateur connecté"""
     sb = get_supabase()
     profile = sb.table("users").select("*").eq("id", user_id).single().execute()
     return profile.data

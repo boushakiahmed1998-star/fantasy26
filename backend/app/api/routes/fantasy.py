@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.services.auto_fill import auto_fill_team
 from app.services.rules_validator import RuleViolation, validate_fantasy_team
+from backend.app.services.sync import invalidate_user
 from core.security import get_current_user
 from core.supabase import get_supabase
 
@@ -175,10 +176,14 @@ async def save_team(body: SaveTeamRequest, user=Depends(get_current_user)):
         res = sb.table("fantasy_teams").insert(team_payload).execute()
 
     logger.info(f"Team saved for user {user['sub']} — budget_used={budget_used}")
+
+     invalidate_user(user["sub"])
+
     return {
         "success": True,
         "budget_used": budget_used,
         "team_id": res.data[0]["id"] if res.data else None,
+        
     }
 
 

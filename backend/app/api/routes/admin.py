@@ -195,6 +195,8 @@ async def confirm_import(
         except Exception as e:
             logger.error(f"Error inserting coach {c.name}: {e}")
             errors.append(f"Entraîneur {c.name}: {str(e)[:100]}")
+            
+invalidate_players()
 
     return {
         "success": True,

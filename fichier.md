@@ -1,24 +1,81 @@
-The user wants me to update the player prices in the import_effectifs.py file based on their Transfermarkt values, with a specific price range:
+phase 4 :
+Scoring Engine & Scraping
+Non commencée
+⬜
+points_engine.py — buts / assists / temps de jeu / cartons / clean sheet
+⬜
+scraper.py — Playwright lazy-load Sofascore
+⬜
+sync.py — hook on_user_login + cache Redis
 
-Goalkeepers and Defenders: 4.0 to 7.0
-Midfielders and Forwards: 4.5 to 12.5
+1. Brancher on_user_login dans auth.py
+Dans la route /login, juste avant le return final :
+pythonfrom app.services.sync import on_user_login
+import threading
 
-I need to interpret Transfermarkt market values and map them to this scale. Let me think about how to map Transfermarkt values to this fantasy price scale.
-For GK/DEF: 4.0 (lowest value) to 7.0 (highest value like Virgil van Dijk, Alexander-Arnold level)
-For MID/FWD: 4.5 (lowest) to 12.5 (top players like Mbappe, Haaland, Vinicius Jr)
-Let me think about Transfermarkt values roughly:
+# Dans async def login(...) :
+# ... après avoir récupéré le profil et créé le token ...
 
-Top players: €100M+ → 11-12.5 for attackers/mids
-€50-100M → 9-11
-€25-50M → 7.5-9
-€10-25M → 6-7.5
-€5-10M → 5-6
-<€5M → 4.5-5
+# Lance en arrière-plan pour ne pas ralentir le login
+threading.Thread(target=on_user_login, args=(res.user.id,), daemon=True).start()
 
-For GK/DEF:
+return { "access_token": token, ... }
+2. Invalider le cache après saveTeam dans fantasy.py
+pythonfrom app.services.sync import invalidate_user
 
-Top defenders €80M+ (van Dijk, Hakimi, etc.) → 7.0
-€40-80M → 6.0-6.5
-€20-40M → 5.5-6.0
-€10-20M → 5.0-5.5
-<€10M → 4.0-5.0
+# À la fin de async def save_team(...), juste avant le return :
+invalidate_user(user["sub"])
+return { "success": True, ... }
+3. Invalider le cache joueurs après un import admin dans admin.py
+pythonfrom app.services.sync import invalidate_players
+
+# À la fin de async def confirm_import(...) :
+invalidate_players()
+return { "success": True, ... }
+4. Ajouter le sofascore_event_id aux matchs
+Quand tu insères un match dans Supabase, ajoute le champ settings :
+pythonsb.table("matches").insert({
+    "team_home": "France",
+    "team_away": "Argentine",
+    "settings": {"sofascore_event_id": "12891234"},  # ← ID dans l'URL Sofascore
+    ...
+})
+5. Installer Playwright (si pas encore fait)
+bashcd backend
+venv311\Scripts\activate
+playwright install chromium
+6. Mettre en place le cron de scraping
+Crée backend/scheduler.py :
+pythonimport schedule, time, asyncio, logging
+from app.services.scraper import scrape_live_matches, scrape_finished_without_stats
+from app.services.points_engine import save_match_points
+from core.supabase import get_supabase
+
+def job_live():
+    asyncio.run(scrape_live_matches())
+
+def job_finished():
+    # Après chaque scrape terminé, calcule les points
+    sb = get_supabase()
+    done = sb.table("matches").select("id").eq("status", "finished").execute().data
+    already = {r["match_id"] for r in sb.table("points_history").select("match_id").execute().data}
+    for m in done:
+        if str(m["id"]) not in already:
+            save_match_points(str(m["id"]))
+
+schedule.every(2).minutes.do(job_live)
+schedule.every(5).minutes.do(job_finished)
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    print("Scheduler démarré")
+    while True:
+        schedule.run_pending()
+        time.sleep(10)
+Et ajoute schedule dans requirements.txt, puis lance-le dans un 3e terminal :
+bashpython scheduler.py
+7. Vérifier que Redis tourne
+bashpython -c "from app.services.sync import redis_health; import json; print(json.dumps(redis_health(), indent=2))"
+Si Redis n'est pas installé localement, le plus simple est Docker :
+bashdocker run -d -p 6379:6379 redis:alpine
+L'ordre logique d'un match : scraper détecte le match live → écrit les stats → scheduler appelle save_match_points → invalidate_match vide le cache → les users voient leurs points mis à jour.

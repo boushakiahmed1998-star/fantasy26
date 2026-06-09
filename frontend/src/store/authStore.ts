@@ -69,7 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   clearError: () => set({ error: null }),
 }))
 
-// ── Intercepteur de secours (si defaults pas encore propagés) ─────────────────
+// ── Intercepteur : injecte le token si absent ─────────────────────────────────
 axios.interceptors.request.use((config) => {
   const t = localStorage.getItem('fb_token')
   if (t && !config.headers['Authorization']) {
@@ -77,3 +77,24 @@ axios.interceptors.request.use((config) => {
   }
   return config
 })
+
+// ── Intercepteur : token expiré → déconnexion propre ─────────────────────────
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Ne pas rediriger si on est déjà sur /login ou /register
+      const isAuthRoute = window.location.pathname === '/login' ||
+                          window.location.pathname === '/register'
+
+      if (!isAuthRoute) {
+        localStorage.removeItem('fb_token')
+        localStorage.removeItem('fb_user')
+        delete axios.defaults.headers.common['Authorization']
+        // Petite pause pour laisser le store se vider avant la redirection
+        setTimeout(() => { window.location.href = '/login' }, 100)
+      }
+    }
+    return Promise.reject(error)
+  }
+)

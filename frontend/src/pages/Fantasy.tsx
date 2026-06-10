@@ -154,16 +154,34 @@ export default function Fantasy() {
   const [search, setSearch] = useState('')
   const [showCoachPicker, setShowCoachPicker] = useState(false)
   const [fetching, setFetching] = useState(true)
+  // ── AJOUT : état d'erreur de chargement ──────────────────────────────────────
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   useEffect(() => {
-  // Attendre que le token soit dispo avant de charger
-  const token = localStorage.getItem('fb_token')
-  if (!token) return  // ProtectedRoute gère la redirection
+    const token = localStorage.getItem('fb_token')
+    if (!token) return
+
     loadTeam()
+
+    // ── CORRECTION : gestion d'erreur sur les appels API ──────────────────────
+    setFetchError(null)
     Promise.all([
-      axios.get('/api/v1/players').then(r => setAllPlayers(r.data.players || [])),
-      axios.get('/api/v1/coaches').then(r => setAllCoaches(r.data.coaches || [])),
-    ]).finally(() => setFetching(false))
+      axios.get('/api/v1/players').then(r => {
+        const players = r.data.players || []
+        setAllPlayers(players)
+        if (players.length === 0) {
+          console.warn('[Fantasy] Aucun joueur retourné par /api/v1/players')
+        }
+      }),
+      axios.get('/api/v1/coaches').then(r => {
+        setAllCoaches(r.data.coaches || [])
+      }),
+    ]).catch(e => {
+      const status = e.response?.status
+      const detail = e.response?.data?.detail || e.message || 'Erreur inconnue'
+      console.error('[Fantasy] Erreur chargement effectifs:', status, detail)
+      setFetchError(`Impossible de charger les effectifs (${status ?? 'réseau'}) : ${detail}`)
+    }).finally(() => setFetching(false))
   }, [])
 
   // Auto-switch filter tab when slot selected
@@ -371,11 +389,8 @@ export default function Fantasy() {
               ))}
 
               {/* Field lines */}
-              {/* Outer boundary */}
               <div style={{ position: 'absolute', inset: '3% 4%', border: '1.5px solid rgba(255,255,255,0.38)', borderRadius: 2, pointerEvents: 'none' }} />
-              {/* Center line */}
               <div style={{ position: 'absolute', top: '50%', left: '4%', right: '4%', height: 1.5, background: 'rgba(255,255,255,0.35)', pointerEvents: 'none' }} />
-              {/* Center circle */}
               <div style={{
                 position: 'absolute', top: '50%', left: '50%',
                 transform: 'translate(-50%, -50%)',
@@ -383,15 +398,10 @@ export default function Fantasy() {
                 border: '1.5px solid rgba(255,255,255,0.32)',
                 borderRadius: '50%', pointerEvents: 'none',
               }} />
-              {/* Center dot */}
               <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 5, height: 5, background: 'rgba(255,255,255,0.5)', borderRadius: '50%', pointerEvents: 'none' }} />
-              {/* Top penalty area */}
               <div style={{ position: 'absolute', top: '3%', left: '18%', right: '18%', height: '17%', border: '1.5px solid rgba(255,255,255,0.32)', borderTop: 'none', pointerEvents: 'none' }} />
-              {/* Bottom penalty area */}
               <div style={{ position: 'absolute', bottom: '3%', left: '18%', right: '18%', height: '17%', border: '1.5px solid rgba(255,255,255,0.32)', borderBottom: 'none', pointerEvents: 'none' }} />
-              {/* Top goal area */}
               <div style={{ position: 'absolute', top: '3%', left: '33%', right: '33%', height: '7%', border: '1.5px solid rgba(255,255,255,0.28)', borderTop: 'none', pointerEvents: 'none' }} />
-              {/* Bottom goal area */}
               <div style={{ position: 'absolute', bottom: '3%', left: '33%', right: '33%', height: '7%', border: '1.5px solid rgba(255,255,255,0.28)', borderBottom: 'none', pointerEvents: 'none' }} />
 
               {/* Player slots */}
@@ -544,7 +554,7 @@ export default function Fantasy() {
               }}
             />
 
-            {/* Position filter tabs (only when no slot selected) */}
+            {/* Position filter tabs */}
             {!activeSlot && !showCoachPicker && (
               <div style={{ display: 'flex', gap: 4 }}>
                 {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(pos => (
@@ -568,14 +578,58 @@ export default function Fantasy() {
 
           {/* List */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
+            {/* ── AJOUT : message d'erreur de chargement visible ── */}
+            {fetchError && (
+              <div style={{
+                margin: '12px', padding: '12px 14px',
+                background: 'rgba(224,82,82,0.1)', border: '1px solid rgba(224,82,82,0.3)',
+                borderRadius: 8, fontSize: 13, color: '#f08080',
+                display: 'flex', flexDirection: 'column', gap: 6,
+              }}>
+                <strong>⚠ Erreur de chargement</strong>
+                <span>{fetchError}</span>
+                <span style={{ fontSize: 11, color: '#8a9a8c' }}>
+                  Vérifie : 1) Le backend est démarré · 2) Les effectifs ont été importés via Admin
+                </span>
+                <button
+                  onClick={() => {
+                    setFetchError(null)
+                    setFetching(true)
+                    Promise.all([
+                      axios.get('/api/v1/players').then(r => setAllPlayers(r.data.players || [])),
+                      axios.get('/api/v1/coaches').then(r => setAllCoaches(r.data.coaches || [])),
+                    ]).catch(e => setFetchError(e.message)).finally(() => setFetching(false))
+                  }}
+                  style={{ background: 'rgba(224,82,82,0.15)', border: '1px solid rgba(224,82,82,0.3)', borderRadius: 6, color: '#f08080', padding: '5px 12px', cursor: 'pointer', fontSize: 12, alignSelf: 'flex-start' }}
+                >
+                  🔄 Réessayer
+                </button>
+              </div>
+            )}
+
             {fetching ? (
               <div style={{ textAlign: 'center', padding: '2.5rem', color: '#6a7a6c', fontSize: 13 }}>
                 ⟳ Chargement...
               </div>
-            ) : listItems.length === 0 ? (
+            ) : listItems.length === 0 && !fetchError ? (
               <div style={{ textAlign: 'center', padding: '2.5rem', color: '#6a7a6c', fontSize: 13 }}>
                 {(showCoachPicker ? allCoaches : allPlayers).length === 0
-                  ? '⚠ Aucun joueur importé. Utilisez l\'Admin → Import IA.'
+                  ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+                      <span style={{ fontSize: 32 }}>⚽</span>
+                      <strong style={{ color: '#f59e0b' }}>Aucun joueur importé</strong>
+                      <span>Lance le script d'import depuis le terminal :</span>
+                      <code style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 6, padding: '6px 10px', fontSize: 11, color: '#c9a84c' }}>
+                        python app/api/routes/Insert_effectifs_direct.py
+                      </code>
+                      <button
+                        onClick={() => navigate('/admin')}
+                        style={{ marginTop: 4, background: 'rgba(201,168,76,0.12)', border: '1px solid rgba(201,168,76,0.3)', borderRadius: 6, color: '#c9a84c', padding: '6px 14px', cursor: 'pointer', fontSize: 12 }}
+                      >
+                        Aller dans l'Admin →
+                      </button>
+                    </div>
+                  )
                   : 'Aucun résultat pour cette recherche.'}
               </div>
             ) : (

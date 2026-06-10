@@ -1,14 +1,9 @@
-phase 5: 
-Pronostics & Classement temps réel
+phase 6: 
+Dashboard complet & finitions UI
 Non commencée
 ⬜
-pronos.py + Pronos.tsx — saisie scores + calcul points
+Dashboard.tsx — stats réelles + prochain match + widget classement
 ⬜
-Ranking.tsx — Supabase Realtime classement live
+Transfers.tsx — remplacement joueurs avant lock
 ⬜
-complaints.py — système de réclamations
-
-pronos.py — routes FastAPI (POST pronostic, GET mes pronos, scoring auto après match)
-Pronos.tsx — UI de saisie avant les matchs + résultats
-Ranking.tsx — classement avec Supabase Realtime
-complaints.py — réclamations en dernier car moins critique
+Responsive mobile + animations + tests complets

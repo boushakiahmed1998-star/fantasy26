@@ -1,0 +1,977 @@
+"""
+insert_effectifs_direct.py
+==========================
+Insère tous les effectifs CdM 2026 DIRECTEMENT dans Supabase
+sans passer par l'API FastAPI ni avoir besoin d'un token admin.
+
+Usage :
+  cd backend
+  python insert_effectifs_direct.py
+
+  # N'importer qu'un groupe :
+  python insert_effectifs_direct.py --groupe C
+
+  # N'importer qu'une nation :
+  python insert_effectifs_direct.py --nation France
+
+Prérequis :
+  - .env avec SUPABASE_URL et SUPABASE_KEY
+  - pip install supabase python-dotenv
+"""
+
+import argparse
+import sys
+import time
+import os
+
+# ── Chargement .env ────────────────────────────────────────────────────────────
+from dotenv import load_dotenv
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("❌ SUPABASE_URL ou SUPABASE_KEY manquant dans .env")
+    sys.exit(1)
+
+from supabase import create_client
+sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  EFFECTIFS — 48 nations CdM 2026
+# ══════════════════════════════════════════════════════════════════════════════
+
+def p(name, nat, pos, price=6.5):
+    return {"name": name, "nationality": nat, "position": pos,
+            "team": nat, "price": float(price)}
+
+def c(name, nat, price=3.0):
+    return {"name": name, "nationality": nat, "team": nat, "price": float(price)}
+
+EFFECTIFS = {
+
+# ────────────────────────── GROUPE A ─────────────────────────────────────────
+"Mexique": { "groupe": "A", "players": [
+    p("Raul Rangel","Mexique","GK",4.5), p("Carlos Acevedo","Mexique","GK",5.0),
+    p("Guillermo Ochoa","Mexique","GK",4.5), p("Israel Reyes","Mexique","DEF",5.0),
+    p("Jesús Gallardo","Mexique","DEF",5.0), p("Jorge Sánchez","Mexique","DEF",5.0),
+    p("César Montes","Mexique","DEF",5.0), p("Johan Vásquez","Mexique","DEF",5.5),
+    p("Mateo Chávez","Mexique","DEF",4.5), p("Erik Lira","Mexique","MID",5.5),
+    p("Luis Romo","Mexique","MID",5.5), p("Obed Vargas","Mexique","MID",6.5),
+    p("Brian Gutiérrez","Mexique","MID",5.5), p("Orbelín Pineda","Mexique","MID",5.5),
+    p("Edson Álvarez","Mexique","MID",8.5), p("Gilberto Mora","Mexique","MID",5.0),
+    p("César Huerta","Mexique","MID",6.0), p("Álvaro Fidalgo","Mexique","MID",5.5),
+    p("Luis Chávez","Mexique","MID",5.5), p("Roberto Alvarado","Mexique","FWD",6.0),
+    p("Alexis Vega","Mexique","FWD",5.5), p("Julián Quiñones","Mexique","FWD",6.0),
+    p("Santiago Gimenez","Mexique","FWD",8.5), p("Guillermo Martínez","Mexique","FWD",5.0),
+    p("Armando González","Mexique","FWD",5.0), p("Raúl Jiménez","Mexique","FWD",5.0),
+], "coaches": [c("Javier Aguirre","Mexique",3.0)]},
+
+"Afrique du Sud": { "groupe": "A", "players": [
+    p("Ronwen Williams","Afrique du Sud","GK",4.5), p("Ricardo Goss","Afrique du Sud","GK",4.0),
+    p("Sipho Chaine","Afrique du Sud","GK",4.0), p("Khuliso Mudau","Afrique du Sud","DEF",4.5),
+    p("Olwethu Makhanya","Afrique du Sud","DEF",4.0), p("Bradley Cross","Afrique du Sud","DEF",4.0),
+    p("Thabang Matuludi","Afrique du Sud","DEF",4.0), p("Nkosinathi Sibisi","Afrique du Sud","DEF",4.0),
+    p("Aubrey Modiba","Afrique du Sud","DEF",4.0), p("Khulumani Ndamane","Afrique du Sud","DEF",4.0),
+    p("Ime Okon","Afrique du Sud","DEF",4.0), p("Samukele Kabini","Afrique du Sud","DEF",4.0),
+    p("Mbekezeli Mbokazi","Afrique du Sud","DEF",4.0), p("Teboho Mokoena","Afrique du Sud","MID",7.0),
+    p("Jayden Adams","Afrique du Sud","MID",5.0), p("Thalente Mbatha","Afrique du Sud","MID",4.5),
+    p("Kamogelo Sebelebele","Afrique du Sud","MID",4.5), p("Sphephelo Sithole","Afrique du Sud","MID",5.0),
+    p("Oswin Appollis","Afrique du Sud","FWD",5.0), p("Tshepang Moremi","Afrique du Sud","FWD",4.5),
+    p("Evidence Makgopa","Afrique du Sud","FWD",5.0), p("Lyle Foster","Afrique du Sud","FWD",7.5),
+    p("Iqraam Rayners","Afrique du Sud","FWD",5.0), p("Relebohile Mofokeng","Afrique du Sud","FWD",5.5),
+    p("Themba Zwane","Afrique du Sud","FWD",4.5), p("Thapelo Maseko","Afrique du Sud","FWD",4.5),
+], "coaches": [c("Hugo Broos","Afrique du Sud",2.0)]},
+
+"Corée du Sud": { "groupe": "A", "players": [
+    p("Jo Hyeonwoo","Corée du Sud","GK",4.5), p("Kim Seunggyu","Corée du Sud","GK",4.0),
+    p("Song Bumkeun","Corée du Sud","GK",4.0), p("Kim Minjae","Corée du Sud","DEF",6.0),
+    p("Cho Wije","Corée du Sud","DEF",4.0), p("Lee Hanbeom","Corée du Sud","DEF",4.5),
+    p("Kim Taehyeon","Corée du Sud","DEF",4.0), p("Park Jinseob","Corée du Sud","DEF",4.5),
+    p("Lee Kihyuk","Corée du Sud","DEF",4.0), p("Lee Taeseok","Corée du Sud","DEF",4.0),
+    p("Seol Youngwoo","Corée du Sud","DEF",5.0), p("Jens Castrop","Corée du Sud","DEF",5.0),
+    p("Kim Moonhwan","Corée du Sud","DEF",4.0), p("Yang Hyunjun","Corée du Sud","MID",5.5),
+    p("Paik Seungho","Corée du Sud","MID",5.0), p("Hwang Inbeom","Corée du Sud","MID",6.5),
+    p("Kim Jinkyu","Corée du Sud","MID",5.0), p("Bae Junho","Corée du Sud","MID",6.0),
+    p("Eom Jisung","Corée du Sud","MID",5.0), p("Hwang Heechan","Corée du Sud","MID",7.5),
+    p("Lee Donggyeong","Corée du Sud","MID",5.0), p("Lee Jaesung","Corée du Sud","MID",5.0),
+    p("Lee Kangin","Corée du Sud","MID",9.0), p("Oh Hyeongyu","Corée du Sud","FWD",5.5),
+    p("Son Heungmin","Corée du Sud","FWD",9.5), p("Cho Guesung","Corée du Sud","FWD",5.0),
+], "coaches": [c("Hong Myung-bo","Corée du Sud",1.5)]},
+
+"Tchéquie": { "groupe": "A", "players": [
+    p("Lukas Hornicek","Tchéquie","GK",4.0), p("Matej Kovar","Tchéquie","GK",5.0),
+    p("Jindrich Stanek","Tchéquie","GK",4.5), p("Vladimir Coufal","Tchéquie","DEF",4.5),
+    p("David Doudera","Tchéquie","DEF",4.5), p("Tomas Holes","Tchéquie","DEF",4.5),
+    p("Robin Hranac","Tchéquie","DEF",5.0), p("Stepan Chaloupek","Tchéquie","DEF",4.0),
+    p("David Jurasek","Tchéquie","DEF",5.0), p("Ladislav Krejci","Tchéquie","DEF",5.0),
+    p("Jaroslav Zeleny","Tchéquie","DEF",4.0), p("David Zima","Tchéquie","DEF",5.0),
+    p("Lukas Cerv","Tchéquie","MID",5.0), p("Vladimir Darida","Tchéquie","MID",5.0),
+    p("Lukas Provod","Tchéquie","MID",6.0), p("Michal Sadilek","Tchéquie","MID",6.0),
+    p("Hugo Sochurek","Tchéquie","MID",4.5), p("Alexandr Sojka","Tchéquie","MID",5.0),
+    p("Tomas Soucek","Tchéquie","MID",8.0), p("Pavel Sulc","Tchéquie","MID",6.5),
+    p("Denis Visinsky","Tchéquie","MID",5.0), p("Adam Hlozek","Tchéquie","FWD",7.0),
+    p("Tomas Chory","Tchéquie","FWD",5.5), p("Mojmir Chytil","Tchéquie","FWD",5.5),
+    p("Jan Kuchta","Tchéquie","FWD",5.0), p("Patrik Schick","Tchéquie","FWD",7.5),
+], "coaches": [c("Miroslav Koubek","Tchéquie",2.0)]},
+
+# ────────────────────────── GROUPE B ─────────────────────────────────────────
+"Canada": { "groupe": "B", "players": [
+    p("Dayne St. Clair","Canada","GK",4.5), p("Maxime Crépeau","Canada","GK",4.0),
+    p("Owen Goodman","Canada","GK",4.0), p("Alistair Johnson","Canada","DEF",5.0),
+    p("Derek Cornelius","Canada","DEF",5.0), p("Richie Laryea","Canada","DEF",4.5),
+    p("Niko Sigur","Canada","DEF",4.5), p("Joel Waterman","Canada","DEF",4.0),
+    p("Luc De Fougerolles","Canada","DEF",4.5), p("Moïse Bombito","Canada","DEF",5.0),
+    p("Alphonso Davies","Canada","DEF",6.5), p("Alfie Jones","Canada","DEF",4.0),
+    p("Stephen Eustáquio","Canada","MID",6.5), p("Ismaël Koné","Canada","MID",6.5),
+    p("Tajon Buchanan","Canada","MID",6.5), p("Mathieu Choinière","Canada","MID",5.0),
+    p("Ali Ahmed","Canada","MID",5.0), p("Nathan Saliba","Canada","MID",5.0),
+    p("Liam Miller","Canada","MID",5.0), p("Marcelo Flores","Canada","MID",5.5),
+    p("Jacob Shaffelburg","Canada","MID",5.5), p("Jonathan Osario","Canada","MID",5.0),
+    p("Jonathan David","Canada","FWD",9.0), p("Cyle Larin","Canada","FWD",6.0),
+    p("Tani Oluwaseyi","Canada","FWD",5.5), p("Promise David","Canada","FWD",5.0),
+], "coaches": [c("Jesse Marsch","Canada",2.0)]},
+
+"Bosnie-Herzégovine": { "groupe": "B", "players": [
+    p("Nikola Vasilj","Bosnie-Herzégovine","GK",4.5), p("Martin Zlomislić","Bosnie-Herzégovine","GK",4.0),
+    p("Osman Hadžikić","Bosnie-Herzégovine","GK",4.0), p("Sead Kolašinac","Bosnie-Herzégovine","DEF",4.5),
+    p("Amar Dedić","Bosnie-Herzégovine","DEF",5.5), p("Nihad Mujakić","Bosnie-Herzégovine","DEF",4.5),
+    p("Nikola Katić","Bosnie-Herzégovine","DEF",4.5), p("Tarik Muharemović","Bosnie-Herzégovine","DEF",5.0),
+    p("Stjepan Radeljić","Bosnie-Herzégovine","DEF",4.0), p("Dennis Hadžikadunić","Bosnie-Herzégovine","DEF",4.5),
+    p("Nidal Čelik","Bosnie-Herzégovine","DEF",4.0), p("Amir Hadžiahmetović","Bosnie-Herzégovine","MID",5.5),
+    p("Ivan Šunjić","Bosnie-Herzégovine","MID",5.0), p("Ivan Bašić","Bosnie-Herzégovine","MID",5.0),
+    p("Dženis Burnić","Bosnie-Herzégovine","MID",5.0), p("Ermin Mahmić","Bosnie-Herzégovine","MID",5.0),
+    p("Benjamin Tahirović","Bosnie-Herzégovine","MID",6.0), p("Amar Memić","Bosnie-Herzégovine","MID",5.0),
+    p("Armin Gigović","Bosnie-Herzégovine","MID",5.5), p("Kerim Alajbegović","Bosnie-Herzégovine","FWD",5.0),
+    p("Esmir Bajraktarević","Bosnie-Herzégovine","FWD",5.5), p("Ermedin Demirović","Bosnie-Herzégovine","FWD",8.0),
+    p("Jovo Lukić","Bosnie-Herzégovine","FWD",5.0), p("Samed Baždar","Bosnie-Herzégovine","FWD",5.0),
+    p("Haris Tabaković","Bosnie-Herzégovine","FWD",5.0), p("Edin Džeko","Bosnie-Herzégovine","FWD",5.5),
+], "coaches": [c("Sergej Barbarez","Bosnie-Herzégovine",1.5)]},
+
+"Qatar": { "groupe": "B", "players": [
+    p("Salah Zakaria","Qatar","GK",4.0), p("Mahmoud Abunada","Qatar","GK",4.0),
+    p("Meshaal Barsham","Qatar","GK",4.0), p("Hashmi Hussein","Qatar","DEF",4.0),
+    p("Ayoub Alawi","Qatar","DEF",4.0), p("Boualem Khoukhi","Qatar","DEF",4.0),
+    p("Pedro Miguel","Qatar","DEF",4.0), p("Issa Laaye","Qatar","DEF",4.0),
+    p("Lucas Mendes","Qatar","DEF",4.0), p("Sultan Al-Brake","Qatar","DEF",4.0),
+    p("Homam Al-Amin","Qatar","DEF",4.0), p("Mohammed Al-Manai","Qatar","MID",5.0),
+    p("Jassem Jaber","Qatar","MID",5.0), p("Karim Boudiaf","Qatar","MID",4.5),
+    p("Ahmed Fathi","Qatar","MID",4.5), p("Abdulaziz Hatem","Qatar","MID",4.5),
+    p("Assim Madibo","Qatar","MID",4.5), p("Tahseen Mohammed","Qatar","FWD",4.5),
+    p("Edmilson Junior","Qatar","FWD",5.0), p("Almoez Ali","Qatar","FWD",6.0),
+    p("Akram Afif","Qatar","FWD",6.5), p("Mohammed Muntari","Qatar","FWD",5.0),
+    p("Youssef Abdulrazzaq","Qatar","FWD",5.0), p("Ahmed Alaa","Qatar","FWD",4.5),
+    p("Hassan Al-Haydos","Qatar","FWD",5.0), p("Ahmed Al-Janahi","Qatar","FWD",5.0),
+], "coaches": [c("Julen Lopetegui","Qatar",1.0)]},
+
+"Suisse": { "groupe": "B", "players": [
+    p("Marvin Keller","Suisse","GK",4.0), p("Gregor Kobel","Suisse","GK",6.0),
+    p("Yvon Mvogo","Suisse","GK",4.0), p("Manuel Akanji","Suisse","DEF",6.0),
+    p("Aurèle Amenda","Suisse","DEF",5.0), p("Eray Cömert","Suisse","DEF",4.5),
+    p("Nico Elvedi","Suisse","DEF",5.0), p("Luca Jaquez","Suisse","DEF",4.5),
+    p("Miro Muheim","Suisse","DEF",5.0), p("Ricardo Rodríguez","Suisse","DEF",4.0),
+    p("Silvan Widmer","Suisse","DEF",4.5), p("Michel Aebischer","Suisse","MID",6.0),
+    p("Remo Freuler","Suisse","MID",6.0), p("Ardon Jashari","Suisse","MID",6.0),
+    p("Fabian Rieder","Suisse","MID",6.0), p("Djibril Sow","Suisse","MID",6.0),
+    p("Granit Xhaka","Suisse","MID",7.0), p("Denis Zakaria","Suisse","MID",7.5),
+    p("Zeki Amdouni","Suisse","FWD",6.0), p("Breel Embolo","Suisse","FWD",6.5),
+    p("Dan Ndoye","Suisse","FWD",7.5), p("Noah Okafor","Suisse","FWD",7.0),
+    p("Rubén Vargas","Suisse","FWD",6.0), p("Christian Fassnacht","Suisse","FWD",5.0),
+    p("Cedric Itten","Suisse","FWD",5.0), p("Johan Manzambi","Suisse","FWD",5.0),
+], "coaches": [c("Murat Yakin","Suisse",3.0)]},
+
+# ────────────────────────── GROUPE C ─────────────────────────────────────────
+"Brésil": { "groupe": "C", "players": [
+    p("Alisson","Brésil","GK",6.0), p("Ederson","Brésil","GK",6.0),
+    p("Weverton","Brésil","GK",4.0), p("Wesley","Brésil","DEF",5.0),
+    p("Douglas Santos","Brésil","DEF",4.5), p("Alex Sandro","Brésil","DEF",4.0),
+    p("Gabriel Magalhães","Brésil","DEF",7.0), p("Marquinhos","Brésil","DEF",6.0),
+    p("Danilo","Brésil","DEF",4.5), p("Bremer","Brésil","DEF",6.0),
+    p("Ibañez","Brésil","DEF",5.0), p("Léo Pereira","Brésil","DEF",5.0),
+    p("Bruno Guimarães","Brésil","MID",10.0), p("Casemiro","Brésil","MID",6.5),
+    p("Danilo Santos","Brésil","MID",6.0), p("Fabinho","Brésil","MID",6.0),
+    p("Lucas Paquetá","Brésil","MID",8.5), p("Raphinha","Brésil","FWD",10.0),
+    p("Neymar","Brésil","FWD",7.5), p("Vinícius Júnior","Brésil","FWD",12.5),
+    p("Luiz Henrique","Brésil","FWD",7.5), p("Matheus Cunha","Brésil","FWD",7.5),
+    p("Gabriel Martinelli","Brésil","FWD",9.5), p("Igor Thiago","Brésil","FWD",6.5),
+    p("Endrick","Brésil","FWD",9.0), p("Rayan","Brésil","FWD",5.5),
+], "coaches": [c("Carlo Ancelotti","Brésil",4.0)]},
+
+"Maroc": { "groupe": "C", "players": [
+    p("Yassine Bounou","Maroc","GK",5.0), p("Munir El Kajoui","Maroc","GK",4.0),
+    p("Ahmed Reda Tagnaouti","Maroc","GK",4.0), p("Noussair Mazraoui","Maroc","DEF",6.0),
+    p("Anass Salah-Eddine","Maroc","DEF",4.5), p("Youssef Belammari","Maroc","DEF",4.0),
+    p("Nayef Aguerd","Maroc","DEF",6.0), p("Chadi Riad","Maroc","DEF",5.0),
+    p("Issa Diop","Maroc","DEF",5.0), p("Redouane Halhal","Maroc","DEF",4.0),
+    p("Achraf Hakimi","Maroc","DEF",7.0), p("Zakaria El Ouahdi","Maroc","DEF",5.0),
+    p("Samir El Mourabet","Maroc","MID",5.0), p("Ayyoub Bouaddi","Maroc","MID",6.0),
+    p("Neil El Aynaoui","Maroc","MID",6.0), p("Sofyan Amrabat","Maroc","MID",7.0),
+    p("Azzedine Ounahi","Maroc","MID",6.0), p("Bilal El Khannouss","Maroc","MID",7.5),
+    p("Ismacel Saibari","Maroc","MID",6.5), p("Abdessamad Ezzalzouli","Maroc","FWD",6.5),
+    p("Chemsdine Talbi","Maroc","FWD",5.0), p("Soufiane Rahimi","Maroc","FWD",6.0),
+    p("Ayoub El Kaabi","Maroc","FWD",6.0), p("Brahim Diaz","Maroc","FWD",9.0),
+    p("Yassine Gessime","Maroc","FWD",5.0), p("Ayoube Amaimouni","Maroc","FWD",5.0),
+], "coaches": [c("Mohamed Ouahbi","Maroc",3.0)]},
+
+"Haïti": { "groupe": "C", "players": [
+    p("Johnny Placide","Haïti","GK",4.0), p("Alexandre Pierre","Haïti","GK",4.0),
+    p("Josué Duverger","Haïti","GK",4.0), p("Carlens Arcus","Haïti","DEF",4.0),
+    p("Wilguens Paugain","Haïti","DEF",4.0), p("Duke Lacroix","Haïti","DEF",4.0),
+    p("Martin Experience","Haïti","DEF",4.0), p("Jean-Kevin Duverne","Haïti","DEF",4.5),
+    p("Ricardo Adé","Haïti","DEF",4.0), p("Hannes Delcroix","Haïti","DEF",4.0),
+    p("Keeto Thermoncy","Haïti","DEF",4.0), p("Leverton Pierre","Haïti","MID",4.5),
+    p("Carl-Fred Sainthe","Haïti","MID",4.5), p("Jean-Jacques Danley","Haïti","MID",4.5),
+    p("Jean-Ricner Bellegarde","Haïti","MID",6.5), p("Pierre Woodenski","Haïti","MID",4.5),
+    p("Dominique Simon","Haïti","MID",4.5), p("Louicius Deedson","Haïti","FWD",5.0),
+    p("Ruben Providence","Haïti","FWD",5.0), p("Josué Casimir","Haïti","FWD",5.0),
+    p("Derrick Etienne","Haïti","FWD",5.0), p("Wilson Isidor","Haïti","FWD",5.5),
+    p("Duckens Nazon","Haïti","FWD",5.0), p("Frantzdy Pierrot","Haïti","FWD",5.0),
+    p("Yassin Fortune","Haïti","FWD",5.0), p("Lenny Joseph","Haïti","FWD",5.0),
+], "coaches": [c("Dennis Amissah","Haïti",1.0)]},
+
+"Écosse": { "groupe": "C", "players": [
+    p("Craig Gordon","Écosse","GK",4.0), p("Angus Gunn","Écosse","GK",4.5),
+    p("Liam Kelly","Écosse","GK",4.0), p("Grant Hanley","Écosse","DEF",4.0),
+    p("Jack Hendry","Écosse","DEF",4.5), p("Aaron Hickey","Écosse","DEF",5.0),
+    p("Dom Hyam","Écosse","DEF",4.5), p("Scott McKenna","Écosse","DEF",4.5),
+    p("Nathan Patterson","Écosse","DEF",5.0), p("Anthony Ralston","Écosse","DEF",4.5),
+    p("Andy Robertson","Écosse","DEF",6.0), p("John Souttar","Écosse","DEF",4.5),
+    p("Kieran Tierney","Écosse","DEF",5.5), p("Ryan Christie","Écosse","MID",6.0),
+    p("Findlay Curtis","Écosse","MID",4.5), p("Lewis Ferguson","Écosse","MID",6.5),
+    p("Ben Gannon-Doak","Écosse","MID",5.5), p("Billy Gilmour","Écosse","MID",6.5),
+    p("John McGinn","Écosse","MID",7.5), p("Kenny McLean","Écosse","MID",5.0),
+    p("Scott McTominay","Écosse","MID",7.5), p("Ché Adams","Écosse","FWD",6.0),
+    p("Lyndon Dykes","Écosse","FWD",5.0), p("George Hirst","Écosse","FWD",5.0),
+    p("Lawrence Shankland","Écosse","FWD",5.5), p("Ross Stewart","Écosse","FWD",5.0),
+], "coaches": [c("Steve Clarke","Écosse",2.5)]},
+
+# ────────────────────────── GROUPE D ─────────────────────────────────────────
+"États-Unis": { "groupe": "D", "players": [
+    p("Chris Brady","États-Unis","GK",4.5), p("Matt Freese","États-Unis","GK",4.0),
+    p("Matt Turner","États-Unis","GK",4.5), p("Max Arfsten","États-Unis","DEF",4.5),
+    p("Sergiño Dest","États-Unis","DEF",5.0), p("Alex Freeman","États-Unis","DEF",4.5),
+    p("Mark McKenzie","États-Unis","DEF",5.0), p("Tim Ream","États-Unis","DEF",4.0),
+    p("Chris Richards","États-Unis","DEF",5.0), p("Antonee Robinson","États-Unis","DEF",6.0),
+    p("Miles Robinson","États-Unis","DEF",5.0), p("Joe Scally","États-Unis","DEF",5.0),
+    p("Auston Trusty","États-Unis","DEF",4.5), p("Tyler Adams","États-Unis","MID",6.5),
+    p("Sebastian Berhalter","États-Unis","MID",5.0), p("Weston McKennie","États-Unis","MID",7.0),
+    p("Gio Reyna","États-Unis","MID",6.5), p("Cristian Roldan","États-Unis","MID",5.0),
+    p("Malik Tillman","États-Unis","MID",7.0), p("Brenden Aaronson","États-Unis","FWD",6.0),
+    p("Folarin Balogun","États-Unis","FWD",7.5), p("Ricardo Pepi","États-Unis","FWD",6.5),
+    p("Christian Pulisic","États-Unis","FWD",9.0), p("Tim Weah","États-Unis","FWD",6.5),
+    p("Haji Wright","États-Unis","FWD",6.0), p("Alejandro Zendejas","États-Unis","FWD",5.5),
+], "coaches": [c("Mauricio Pochettino","États-Unis",2.5)]},
+
+"Paraguay": { "groupe": "D", "players": [
+    p("Gatito Fernández","Paraguay","GK",4.0), p("Orlando Gill","Paraguay","GK",4.0),
+    p("Gastón Olveira","Paraguay","GK",4.0), p("Gustavo Gómez","Paraguay","DEF",5.0),
+    p("Júnior Alonso","Paraguay","DEF",4.5), p("Fabián Balbuena","Paraguay","DEF",4.0),
+    p("Omar Alderete","Paraguay","DEF",5.0), p("Juan José Cáceres","Paraguay","DEF",4.5),
+    p("Gustavo Velázquez","Paraguay","DEF",4.0), p("José Canale","Paraguay","DEF",4.0),
+    p("Alexandro Maidana","Paraguay","DEF",4.0), p("Miguel Almirón","Paraguay","MID",7.0),
+    p("Kaku","Paraguay","MID",5.5), p("Andrés Cubas","Paraguay","MID",5.5),
+    p("Ramón Sosa","Paraguay","MID",6.0), p("Diego Gómez","Paraguay","MID",7.0),
+    p("Damián Bobadilla","Paraguay","MID",6.0), p("Braian Ojeda","Paraguay","MID",5.0),
+    p("Matías Galarza","Paraguay","MID",5.0), p("Maurício","Paraguay","MID",6.0),
+    p("Antonio Sanabria","Paraguay","FWD",6.0), p("Julio Enciso","Paraguay","FWD",7.5),
+    p("Gabriel Ávalos","Paraguay","FWD",5.0), p("Álex Arce","Paraguay","FWD",5.0),
+    p("Isidro Pitta","Paraguay","FWD",5.5), p("Gustavo Caballero","Paraguay","FWD",5.0),
+], "coaches": [c("Gustavo Morínigo","Paraguay",1.5)]},
+
+"Australie": { "groupe": "D", "players": [
+    p("Mathew Ryan","Australie","GK",4.0), p("Paul Izzo","Australie","GK",4.0),
+    p("Patrick Beach","Australie","GK",4.0), p("Aziz Behich","Australie","DEF",4.0),
+    p("Jordan Bos","Australie","DEF",5.0), p("Cameron Burgess","Australie","DEF",4.5),
+    p("Alessandro Circati","Australie","DEF",5.0), p("Milos Degenek","Australie","DEF",4.0),
+    p("Jason Geria","Australie","DEF",4.0), p("Lucas Herrington","Australie","DEF",4.0),
+    p("Jacob Italiano","Australie","DEF",4.0), p("Harry Souttar","Australie","DEF",5.0),
+    p("Kai Trewin","Australie","DEF",4.0), p("Cameron Devlin","Australie","MID",5.0),
+    p("Ajdin Hrustic","Australie","MID",5.5), p("Jackson Irvine","Australie","MID",5.5),
+    p("Connor Metcalfe","Australie","MID",5.0), p("Paul Okon-Engstler","Australie","MID",4.5),
+    p("Aiden O'Neill","Australie","MID",5.0), p("Nestory Irankunda","Australie","FWD",6.0),
+    p("Mathew Leckie","Australie","FWD",5.0), p("Awer Mabil","Australie","FWD",5.5),
+    p("Mohamed Toure","Australie","FWD",5.0), p("Nishan Velupillay","Australie","FWD",5.0),
+    p("Christian Volpato","Australie","FWD",5.5), p("Tete Yengi","Australie","FWD",5.0),
+], "coaches": [c("Tony Popovic","Australie",2.0)]},
+
+"Turquie": { "groupe": "D", "players": [
+    p("Altay Bayındır","Turquie","GK",5.0), p("Mert Günok","Turquie","GK",4.0),
+    p("Uğurcan Çakır","Turquie","GK",5.0), p("Abdülkerim Bardakcı","Turquie","DEF",5.0),
+    p("Çağlar Söyüncü","Turquie","DEF",5.0), p("Eren Elmalı","Turquie","DEF",5.0),
+    p("Ferdi Kadıoğlu","Turquie","DEF",6.0), p("Merih Demiral","Turquie","DEF",5.0),
+    p("Mert Müldür","Turquie","DEF",5.0), p("Ozan Kabak","Turquie","DEF",5.0),
+    p("Samet Akaydın","Turquie","DEF",4.0), p("Zeki Çelik","Turquie","DEF",5.0),
+    p("Hakan Çalhanoğlu","Turquie","MID",8.0), p("İsmail Yüksek","Turquie","MID",6.0),
+    p("Kaan Ayhan","Turquie","MID",5.0), p("Orkun Kökçü","Turquie","MID",7.0),
+    p("Salih Özcan","Turquie","MID",6.0), p("Arda Güler","Turquie","FWD",9.0),
+    p("Barış Alper Yılmaz","Turquie","FWD",7.0), p("Can Uzun","Turquie","FWD",6.0),
+    p("Deniz Gül","Turquie","FWD",5.0), p("İrfan Can Kahveci","Turquie","FWD",6.0),
+    p("Kenan Yıldız","Turquie","FWD",8.5), p("Kerem Aktürkoğlu","Turquie","FWD",7.5),
+    p("Oğuz Aydın","Turquie","FWD",5.0), p("Yunus Akgün","Turquie","FWD",5.5),
+], "coaches": [c("Vincenzo Montella","Turquie",3.5)]},
+
+# ────────────────────────── GROUPE E ─────────────────────────────────────────
+"Allemagne": { "groupe": "E", "players": [
+    p("Oliver Baumann","Allemagne","GK",4.5), p("Manuel Neuer","Allemagne","GK",5.0),
+    p("Alexander Nubel","Allemagne","GK",5.0), p("Waldemar Anton","Allemagne","DEF",5.0),
+    p("Nathaniel Brown","Allemagne","DEF",5.0), p("Joshua Kimmich","Allemagne","DEF",6.0),
+    p("David Raum","Allemagne","DEF",5.0), p("Antonio Rudiger","Allemagne","DEF",6.0),
+    p("Nico Schlotterbeck","Allemagne","DEF",6.0), p("Jonathan Tah","Allemagne","DEF",6.0),
+    p("Malick Thiaw","Allemagne","DEF",5.0), p("Nadiem Amiri","Allemagne","MID",5.5),
+    p("Leon Goretzka","Allemagne","MID",6.5), p("Pascal Gross","Allemagne","MID",5.5),
+    p("Jamie Leweling","Allemagne","MID",6.0), p("Lennart Karl","Allemagne","MID",5.0),
+    p("Jamal Musiala","Allemagne","MID",10.5), p("Felix Nmecha","Allemagne","MID",6.0),
+    p("Alexander Pavlovic","Allemagne","MID",7.0), p("Angelo Stiller","Allemagne","MID",7.0),
+    p("Florian Wirtz","Allemagne","FWD",11.5), p("Maximilian Beier","Allemagne","FWD",7.0),
+    p("Kai Havertz","Allemagne","FWD",9.0), p("Leroy Sane","Allemagne","FWD",9.0),
+    p("Denis Undav","Allemagne","FWD",7.0), p("Nick Woltemade","Allemagne","FWD",5.5),
+], "coaches": [c("Julian Nagelsmann","Allemagne",3.5)]},
+
+"Curaçao": { "groupe": "E", "players": [
+    p("Tyrick Bodak","Curaçao","GK",4.0), p("Trevor Doornbusch","Curaçao","GK",4.0),
+    p("Eloy Room","Curaçao","GK",4.0), p("Riechedly Bazoer","Curaçao","DEF",4.5),
+    p("Juriën Gaari","Curaçao","DEF",4.0), p("Roshon van Eijma","Curaçao","DEF",4.0),
+    p("Sherel Floranus","Curaçao","DEF",4.0), p("Bradley Martis","Curaçao","DEF",4.0),
+    p("Justin Ogenia","Curaçao","DEF",4.0), p("Nathangelo Markelo","Curaçao","DEF",4.0),
+    p("Leandro Bacuna","Curaçao","MID",5.0), p("Vurnon Anita","Curaçao","MID",4.5),
+    p("Kevin Felida","Curaçao","MID",4.5), p("Godfried Roemeratoe","Curaçao","MID",4.5),
+    p("Juninho Bacuna","Curaçao","MID",5.0), p("Roly Bonevacia","Curaçao","MID",4.5),
+    p("Kenji Gorré","Curaçao","FWD",5.0), p("Jearl Margaritha","Curaçao","FWD",4.5),
+    p("Gervane Kastaneer","Curaçao","FWD",4.5), p("Rangelo Janga","Curaçao","FWD",4.5),
+    p("Charlison Benschop","Curaçao","FWD",4.5), p("Rayvien Rosario","Curaçao","FWD",4.5),
+], "coaches": [c("Dick Advocaat","Curaçao",1.5)]},
+
+"Côte d'Ivoire": { "groupe": "E", "players": [
+    p("Yahia Fofana","Côte d'Ivoire","GK",6.0), p("Mohamed Koné","Côte d'Ivoire","GK",5.0),
+    p("Alban Lafont","Côte d'Ivoire","GK",6.0), p("Emmanuel Agbadou","Côte d'Ivoire","DEF",7.5),
+    p("Clément Akpa","Côte d'Ivoire","DEF",5.5), p("Ousmane Diomandé","Côte d'Ivoire","DEF",6.0),
+    p("Guéla Doué","Côte d'Ivoire","DEF",6.0), p("Ghislain Konan","Côte d'Ivoire","DEF",5.0),
+    p("Odilon Kossounou","Côte d'Ivoire","DEF",6.5), p("Evan Ndicka","Côte d'Ivoire","DEF",6.5),
+    p("Wilfried Singo","Côte d'Ivoire","DEF",6.5), p("Seko Fofana","Côte d'Ivoire","MID",8.5),
+    p("Parfait Guiagon","Côte d'Ivoire","MID",5.5), p("Christ Inao Oulaï","Côte d'Ivoire","MID",5.5),
+    p("Franck Kessié","Côte d'Ivoire","MID",5.0), p("Ibrahim Sangaré","Côte d'Ivoire","MID",8.5),
+    p("Jean-Mickaël Seri","Côte d'Ivoire","MID",7.0), p("Simon Adingra","Côte d'Ivoire","FWD",6.5),
+    p("Ange-Yoan Bonny","Côte d'Ivoire","FWD",7.5), p("Amad Diallo","Côte d'Ivoire","FWD",7.5),
+    p("Oumar Diakité","Côte d'Ivoire","FWD",6.0), p("Yan Diomandé","Côte d'Ivoire","FWD",7.5),
+    p("Evann Guessand","Côte d'Ivoire","FWD",7.0), p("Nicolas Pépé","Côte d'Ivoire","FWD",7.5),
+    p("Bazoumana Touré","Côte d'Ivoire","FWD",6.0), p("Elye Wahi","Côte d'Ivoire","FWD",8.0),
+], "coaches": [c("Emerse Fae","Côte d'Ivoire",1.5)]},
+
+"Équateur": { "groupe": "E", "players": [
+    p("Hernán Galíndez","Équateur","GK",6.5), p("Moisés Ramírez","Équateur","GK",5.5),
+    p("Gonzalo Valle","Équateur","GK",5.0), p("Willian Pacho","Équateur","DEF",6.5),
+    p("Piero Hincapié","Équateur","DEF",6.0), p("Joel Ordóñez","Équateur","DEF",5.5),
+    p("Félix Torres","Équateur","DEF",5.5), p("Pervis Estupiñán","Équateur","DEF",5.0),
+    p("Ángelo Preciado","Équateur","DEF",5.0), p("Jackson Porozo","Équateur","DEF",6.5),
+    p("Moisés Caicedo","Équateur","MID",8.0), p("Jordy Alcívar","Équateur","MID",6.5),
+    p("Denil Castillo","Équateur","MID",6.5), p("Alan Franco","Équateur","MID",7.0),
+    p("Pedro Vite","Équateur","MID",6.0), p("Kendry Páez","Équateur","MID",7.5),
+    p("Yaimar Medina","Équateur","MID",6.5), p("Kevin Rodríguez","Équateur","FWD",7.0),
+    p("Anthony Valencia","Équateur","FWD",6.5), p("Enner Valencia","Équateur","FWD",7.0),
+    p("Jordy Caicedo","Équateur","FWD",6.5), p("Jeremy Arévalo","Équateur","FWD",6.5),
+    p("Gonzalo Plata","Équateur","FWD",7.5), p("Alan Minda","Équateur","FWD",6.0),
+    p("John Yeboah","Équateur","FWD",6.0), p("Nilson Angulo","Équateur","FWD",6.5),
+], "coaches": [c("Sebastian Beccacece","Équateur",3.0)]},
+
+# ────────────────────────── GROUPE F ─────────────────────────────────────────
+"Pays-Bas": { "groupe": "F", "players": [
+    p("Mark Flekken","Pays-Bas","GK",7.0), p("Robin Roefs","Pays-Bas","GK",5.5),
+    p("Bart Verbruggen","Pays-Bas","GK",8.0), p("Nathan Aké","Pays-Bas","DEF",5.0),
+    p("Denzel Dumfries","Pays-Bas","DEF",6.5), p("Jorrel Hato","Pays-Bas","DEF",5.5),
+    p("Jurriën Timber","Pays-Bas","DEF",6.5), p("Micky van de Ven","Pays-Bas","DEF",5.0),
+    p("Virgil van Dijk","Pays-Bas","DEF",7.0), p("Jan Paul van Hecke","Pays-Bas","DEF",4.5),
+    p("Mats Wieffer","Pays-Bas","DEF",5.5), p("Frenkie de Jong","Pays-Bas","MID",9.5),
+    p("Marten de Roon","Pays-Bas","MID",7.5), p("Ryan Gravenberch","Pays-Bas","MID",8.5),
+    p("Justin Kluivert","Pays-Bas","MID",7.5), p("Teun Koopmeiners","Pays-Bas","MID",6.5),
+    p("Tijjani Reijnders","Pays-Bas","MID",7.0), p("Guus Til","Pays-Bas","MID",6.0),
+    p("Quinten Timber","Pays-Bas","MID",5.5), p("Brian Brobbey","Pays-Bas","FWD",6.0),
+    p("Memphis Depay","Pays-Bas","FWD",6.5), p("Cody Gakpo","Pays-Bas","FWD",8.5),
+    p("Noa Lang","Pays-Bas","FWD",6.5), p("Donyell Malen","Pays-Bas","FWD",8.0),
+    p("Crysencio Summerville","Pays-Bas","FWD",7.5), p("Wout Weghorst","Pays-Bas","FWD",5.5),
+], "coaches": [c("Ronald Koeman","Pays-Bas",3.5)]},
+
+"Japon": { "groupe": "F", "players": [
+    p("Hayakawa Tomoki","Japon","GK",5.5), p("Suzuki Zion","Japon","GK",6.5),
+    p("Osako Keisuke","Japon","GK",5.5), p("Nagatomo Yuto","Japon","DEF",6.5),
+    p("Taniguchi Shogo","Japon","DEF",6.0), p("Tomiyasu Takehiro","Japon","DEF",5.5),
+    p("Itakura Ko","Japon","DEF",4.0), p("Watanabe Tsuyoshi","Japon","DEF",6.0),
+    p("Ito Hiroki","Japon","DEF",5.5), p("Suzuki Junnosuke","Japon","DEF",5.5),
+    p("Seko Ayumu","Japon","DEF",4.5), p("Sugawara Yukinari","Japon","DEF",5.0),
+    p("Kamada Daichi","Japon","MID",6.5), p("Sano Kaishu","Japon","MID",7.0),
+    p("Tanaka Ao","Japon","MID",6.0), p("Endo Wataru","Japon","MID",6.0),
+    p("Nakamura Keito","Japon","MID",5.5), p("Doan Ritsu","Japon","FWD",7.0),
+    p("Ito Junya","Japon","FWD",6.5), p("Kubo Takefusa","Japon","FWD",7.5),
+    p("Suzuki Yuito","Japon","FWD",7.5), p("Ueda Ayase","Japon","FWD",6.0),
+    p("Ogawa Koki","Japon","FWD",5.0), p("Maeda Daizen","Japon","FWD",6.5),
+    p("Shiogai Kento","Japon","FWD",6.0), p("Goto Keisuke","Japon","FWD",5.5),
+], "coaches": [c("Hajime Moriyasu","Japon",3.0)]},
+
+"Suède": { "groupe": "F", "players": [
+    p("Viktor Johansson","Suède","GK",5.0), p("Kristoffer Nordfeldt","Suède","GK",4.5),
+    p("Jacob Widell Zetterström","Suède","GK",4.5), p("Hjalmar Ekdal","Suède","DEF",5.5),
+    p("Gabriel Gudmundsson","Suède","DEF",4.0), p("Isak Hien","Suède","DEF",6.0),
+    p("Herman Johansson","Suède","DEF",4.5), p("Gustaf Lagerbielke","Suède","DEF",5.0),
+    p("Victor Lindelöf","Suède","DEF",4.5), p("Eric Smith","Suède","DEF",5.5),
+    p("Carl Starfelt","Suède","DEF",5.0), p("Elliot Stroud","Suède","DEF",4.0),
+    p("Daniel Svensson","Suède","DEF",5.0), p("Jesper Kalström","Suède","MID",5.5),
+    p("Yasin Ayari","Suède","MID",6.5), p("Mattias Svanberg","Suède","MID",6.5),
+    p("Lucas Bergvall","Suède","MID",7.5), p("Besfort Zeneli","Suède","MID",5.0),
+    p("Taha Ali","Suède","FWD",4.5), p("Alexander Bernhardsson","Suède","FWD",5.5),
+    p("Anthony Elanga","Suède","FWD",7.5), p("Viktor Gyökeres","Suède","FWD",10.0),
+    p("Alexander Isak","Suède","FWD",9.5), p("Gustaf Nilsson","Suède","FWD",6.0),
+    p("Benjamin Nygren","Suède","FWD",5.5), p("Ken Sema","Suède","FWD",5.0),
+], "coaches": [c("Graham Potter","Suède",2.0)]},
+
+"Tunisie": { "groupe": "F", "players": [
+    p("Sabri Ben Hessen","Tunisie","GK",5.0), p("Abdelmouhib Chamakh","Tunisie","GK",4.5),
+    p("Aymen Dahman","Tunisie","GK",5.0), p("Ali Abdi","Tunisie","DEF",5.0),
+    p("Adem Arous","Tunisie","DEF",4.5), p("Mohamed Amine Ben Hamida","Tunisie","DEF",4.0),
+    p("Dylan Bronn","Tunisie","DEF",5.0), p("Raed Chikhaoui","Tunisie","DEF",4.5),
+    p("Moutaz Neffati","Tunisie","DEF",4.5), p("Omar Rekik","Tunisie","DEF",5.5),
+    p("Montassar Talbi","Tunisie","DEF",5.0), p("Yan Valery","Tunisie","DEF",4.0),
+    p("Mortadha Ben Ouanes","Tunisie","MID",5.0), p("Anis Ben Slimane","Tunisie","MID",6.5),
+    p("Ismael Gharbi","Tunisie","MID",6.0), p("Rani Khedira","Tunisie","MID",6.5),
+    p("Mohamed Hadj Mahmoud","Tunisie","MID",5.0), p("Hannibal Mejbri","Tunisie","MID",7.5),
+    p("Ellyes Skhiri","Tunisie","MID",7.5), p("Elias Achouri","Tunisie","FWD",6.0),
+    p("Khalil Ayari","Tunisie","FWD",6.5), p("Firas Chaouat","Tunisie","FWD",4.5),
+    p("Rayan Elloumi","Tunisie","FWD",5.0), p("Hazem Mastouri","Tunisie","FWD",4.5),
+    p("Elias Saad","Tunisie","FWD",5.5), p("Sebastian Tounekti","Tunisie","FWD",5.5),
+], "coaches": [c("Sabri Lamouchi","Tunisie",1.5)]},
+
+# ────────────────────────── GROUPE G ─────────────────────────────────────────
+"Belgique": { "groupe": "G", "players": [
+    p("Thibaut Courtois","Belgique","GK",7.0), p("Senne Lammens","Belgique","GK",5.0),
+    p("Mike Penders","Belgique","GK",4.0), p("Timothy Castagne","Belgique","DEF",6.0),
+    p("Zeno Debast","Belgique","DEF",6.5), p("Maxim De Cuyper","Belgique","DEF",6.0),
+    p("Koni De Winter","Belgique","DEF",5.5), p("Brandon Mechele","Belgique","DEF",4.5),
+    p("Thomas Meunier","Belgique","DEF",5.5), p("Nathan Ngoy","Belgique","DEF",5.0),
+    p("Joaquin Seys","Belgique","DEF",4.5), p("Arthur Theate","Belgique","DEF",6.0),
+    p("Kevin De Bruyne","Belgique","MID",9.5), p("Amadou Onana","Belgique","MID",7.5),
+    p("Nicolas Raskin","Belgique","MID",6.5), p("Youri Tielemans","Belgique","MID",7.5),
+    p("Hans Vanaken","Belgique","MID",7.0), p("Axel Witsel","Belgique","MID",6.5),
+    p("Charles De Ketelaere","Belgique","FWD",7.5), p("Jeremy Doku","Belgique","FWD",10.0),
+    p("Matias Fernandez Pardo","Belgique","FWD",6.0), p("Romelu Lukaku","Belgique","FWD",6.5),
+    p("Dodi Lukebakio","Belgique","FWD",6.0), p("Diego Moreira","Belgique","FWD",6.0),
+    p("Alexis Saelemaekers","Belgique","FWD",6.5), p("Leandro Trossard","Belgique","FWD",7.5),
+], "coaches": [c("Rudi Garcia","Belgique",3.5)]},
+
+"Égypte": { "groupe": "G", "players": [
+    p("Mohamed El Shenawy","Égypte","GK",4.5), p("Mostafa Shobeir","Égypte","GK",4.5),
+    p("Mohamed Alaa","Égypte","GK",4.5), p("Mohamed Hani","Égypte","DEF",4.5),
+    p("Tarek Alaa","Égypte","DEF",4.5), p("Hamdy Fathy","Égypte","DEF",5.0),
+    p("Rami Rabia","Égypte","DEF",5.0), p("Yasser Ibrahim","Égypte","DEF",5.0),
+    p("Hossam Abdelmaguid","Égypte","DEF",4.0), p("Mohamed Abdelmonem","Égypte","DEF",5.5),
+    p("Ahmed Fotouh","Égypte","DEF",4.5), p("Karim Hafez","Égypte","DEF",5.0),
+    p("Marwan Attia","Égypte","MID",5.0), p("Mohanad Lasheen","Égypte","MID",5.0),
+    p("Nabil Emad","Égypte","MID",4.5), p("Mahmoud Saber","Égypte","MID",4.5),
+    p("Ahmed Zizo","Égypte","MID",6.0), p("Emam Ashour","Égypte","MID",6.0),
+    p("Mostafa Ziko","Égypte","MID",5.0), p("Mahmoud Trezeguet","Égypte","MID",7.5),
+    p("Ibrahim Adel","Égypte","MID",6.5), p("Haissem Hassan","Égypte","MID",5.5),
+    p("Mohamed Salah","Égypte","FWD",8.5), p("Omar Marmoush","Égypte","FWD",8.0),
+    p("Aqtay Abdallah","Égypte","FWD",5.0), p("Hamza Abdelkarim","Égypte","FWD",4.0),
+], "coaches": [c("Hossam Hassan","Égypte",2.5)]},
+
+"Iran": { "groupe": "G", "players": [
+    p("Alireza Beiranvand","Iran","GK",5.5), p("Seyed Hossein Hosseini","Iran","GK",5.0),
+    p("Payam Niazmand","Iran","GK",4.0), p("Danial Eiri","Iran","DEF",4.5),
+    p("Ehsan Hajsafi","Iran","DEF",5.0), p("Saleh Hardani","Iran","DEF",4.5),
+    p("Hossein Kanaani","Iran","DEF",5.0), p("Shoja Khalilzadeh","Iran","DEF",5.5),
+    p("Milad Mohammadi","Iran","DEF",5.5), p("Ali Nemati","Iran","DEF",4.5),
+    p("Ramin Rezaeian","Iran","DEF",5.5), p("Rouzbeh Cheshmi","Iran","MID",5.5),
+    p("Saeid Ezatolahi","Iran","MID",6.5), p("Mehdi Ghaedi","Iran","MID",6.0),
+    p("Saman Ghoddos","Iran","MID",6.5), p("Mohammad Ghorbani","Iran","MID",5.0),
+    p("Alireza Jahanbakhsh","Iran","MID",7.0), p("Mohammad Mohebi","Iran","MID",5.0),
+    p("Amir Mohammad Razzaghinia","Iran","MID",4.5), p("Mehdi Torabi","Iran","MID",6.0),
+    p("Aria Yousefi","Iran","MID",4.5), p("Ali Alipour","Iran","FWD",6.0),
+    p("Dennis Dargahi","Iran","FWD",5.5), p("Amirhossein Hosseinzadeh","Iran","FWD",5.5),
+    p("Mehdi Taremi","Iran","FWD",7.5), p("Shahriyar Moghanlou","Iran","FWD",4.5),
+], "coaches": [c("Amir Ghalenoei","Iran",1.5)]},
+
+"Nouvelle-Zélande": { "groupe": "G", "players": [
+    p("Max Crocombe","Nouvelle-Zélande","GK",5.0), p("Alex Paulsen","Nouvelle-Zélande","GK",4.0),
+    p("Michael Woud","Nouvelle-Zélande","GK",4.0), p("Tim Payne","Nouvelle-Zélande","DEF",4.5),
+    p("Francis De Vries","Nouvelle-Zélande","DEF",4.0), p("Tyler Bindon","Nouvelle-Zélande","DEF",6.0),
+    p("Michael Boxall","Nouvelle-Zélande","DEF",5.0), p("Liberato Cacace","Nouvelle-Zélande","DEF",5.5),
+    p("Nando Pijnaker","Nouvelle-Zélande","DEF",4.5), p("Finn Surman","Nouvelle-Zélande","DEF",4.5),
+    p("Callan Elliot","Nouvelle-Zélande","DEF",4.5), p("Tommy Smith","Nouvelle-Zélande","DEF",4.5),
+    p("Joe Bell","Nouvelle-Zélande","MID",6.0), p("Marko Stamenić","Nouvelle-Zélande","MID",5.5),
+    p("Alex Rufer","Nouvelle-Zélande","MID",4.5), p("Ryan Thomas","Nouvelle-Zélande","MID",5.0),
+    p("Lachlan Bayliss","Nouvelle-Zélande","MID",4.0), p("Matt Garbett","Nouvelle-Zélande","FWD",5.0),
+    p("Chris Wood","Nouvelle-Zélande","FWD",8.0), p("Sarpreet Singh","Nouvelle-Zélande","FWD",5.0),
+    p("Eli Just","Nouvelle-Zélande","FWD",4.5), p("Kosta Barbarouses","Nouvelle-Zélande","FWD",4.5),
+    p("Ben Waine","Nouvelle-Zélande","FWD",4.5), p("Ben Old","Nouvelle-Zélande","FWD",5.0),
+    p("Callum McCowatt","Nouvelle-Zélande","FWD",4.5), p("Jesse Randall","Nouvelle-Zélande","FWD",4.0),
+], "coaches": [c("Darren Bazeley","Nouvelle-Zélande",1.0)]},
+
+# ────────────────────────── GROUPE H ─────────────────────────────────────────
+"Espagne": { "groupe": "H", "players": [
+    p("Unai Simón","Espagne","GK",6.5), p("David Raya","Espagne","GK",6.0),
+    p("Joan Garcia","Espagne","GK",5.0), p("Marc Cucurella","Espagne","DEF",6.0),
+    p("Alejandro Grimaldo","Espagne","DEF",5.5), p("Pau Cubarsí","Espagne","DEF",5.5),
+    p("Aymeric Laporte","Espagne","DEF",5.5), p("Marc Pubill","Espagne","DEF",4.5),
+    p("Eric García","Espagne","DEF",5.0), p("Marcos Llorente","Espagne","DEF",6.0),
+    p("Pedro Porro","Espagne","DEF",6.5), p("Pedri","Espagne","MID",11.5),
+    p("Fabián Ruiz","Espagne","MID",8.0), p("Martín Zubimendi","Espagne","MID",6.5),
+    p("Gavi","Espagne","MID",6.0), p("Rodri","Espagne","MID",8.0),
+    p("Álex Baena","Espagne","MID",6.5), p("Mikel Merino","Espagne","MID",6.0),
+    p("Mikel Oyarzabal","Espagne","FWD",8.5), p("Dani Olmo","Espagne","FWD",9.5),
+    p("Nico Williams","Espagne","FWD",10.5), p("Yéremy Pino","Espagne","FWD",7.5),
+    p("Ferran Torres","Espagne","FWD",8.5), p("Borja Iglesias","Espagne","FWD",6.0),
+    p("Víctor Muñoz","Espagne","FWD",6.5), p("Lamine Yamal","Espagne","FWD",12.0),
+], "coaches": [c("Luis de la Fuente","Espagne",4.0)]},
+
+"Cap-Vert": { "groupe": "H", "players": [
+    p("Josimar Dias","Cap-Vert","GK",4.5), p("Márcio da Rosa","Cap-Vert","GK",4.0),
+    p("Carlos Santos","Cap-Vert","GK",4.0), p("Steven Moreira","Cap-Vert","DEF",5.0),
+    p("Wagner Pina","Cap-Vert","DEF",4.5), p("João Paulo Fernandes","Cap-Vert","DEF",5.0),
+    p("Sidny Lopes Cabral","Cap-Vert","DEF",5.5), p("Logan Costa","Cap-Vert","DEF",6.0),
+    p("Roberto Lopes","Cap-Vert","DEF",5.0), p("Kelvin Pires","Cap-Vert","DEF",4.5),
+    p("Ianique Tavares","Cap-Vert","DEF",4.5), p("Edilson Borges","Cap-Vert","DEF",4.5),
+    p("Jamiro Monteiro","Cap-Vert","MID",5.5), p("Telmo Arcanjo","Cap-Vert","MID",5.0),
+    p("Yannick Semedo","Cap-Vert","MID",5.0), p("Laros Duarte","Cap-Vert","MID",6.0),
+    p("Deroy Duarte","Cap-Vert","MID",5.5), p("Kevin Pina","Cap-Vert","MID",5.0),
+    p("Ryan Mendes","Cap-Vert","FWD",5.5), p("Willy Semedo","Cap-Vert","FWD",5.0),
+    p("Garry Rodrigues","Cap-Vert","FWD",6.0), p("Jovane Cabral","Cap-Vert","FWD",6.5),
+    p("Nuno Da Costa","Cap-Vert","FWD",6.0), p("Dailon Livramento","Cap-Vert","FWD",5.5),
+    p("Gilson Benchimol","Cap-Vert","FWD",4.5), p("Hélio Varela","Cap-Vert","FWD",4.5),
+], "coaches": [c("Bubista","Cap-Vert",1.0)]},
+
+"Arabie saoudite": { "groupe": "H", "players": [
+    p("Nawaf Al Aqidi","Arabie saoudite","GK",5.0), p("Mohamed Al Owais","Arabie saoudite","GK",6.0),
+    p("Ahmed Alkassar","Arabie saoudite","GK",4.5), p("Saud Abdulhamid","Arabie saoudite","DEF",5.5),
+    p("Jehad Thakri","Arabie saoudite","DEF",4.0), p("Abdulelah Al Amri","Arabie saoudite","DEF",4.5),
+    p("Hassan Tambakti","Arabie saoudite","DEF",5.0), p("Ali Lajami","Arabie saoudite","DEF",4.5),
+    p("Hassan Kadesh","Arabie saoudite","DEF",4.5), p("Moteb Al Harbi","Arabie saoudite","DEF",4.5),
+    p("Nawaf Boushal","Arabie saoudite","DEF",4.5), p("Ali Majrashi","Arabie saoudite","DEF",4.0),
+    p("Mohammed Abu Alshamat","Arabie saoudite","DEF",4.0), p("Ziyad Al Johani","Arabie saoudite","MID",4.5),
+    p("Nasser Al Dawsari","Arabie saoudite","MID",6.0), p("Mohamed Kanno","Arabie saoudite","MID",5.5),
+    p("Abdullah Al Khaibari","Arabie saoudite","MID",5.0), p("Alaa Al Hejji","Arabie saoudite","MID",4.0),
+    p("Musab Al Juwayr","Arabie saoudite","MID",5.0), p("Sultan Mandash","Arabie saoudite","MID",5.0),
+    p("Ayman Yahya","Arabie saoudite","MID",5.5), p("Khalid Al Ghannam","Arabie saoudite","MID",5.5),
+    p("Salem Al Dawsari","Arabie saoudite","FWD",7.0), p("Abdullah Al Hamdan","Arabie saoudite","FWD",5.5),
+    p("Feras Al Brikan","Arabie saoudite","FWD",5.0), p("Saleh Al Shehri","Arabie saoudite","FWD",5.5),
+], "coaches": [c("Georgios Donis","Arabie saoudite",1.0)]},
+
+"Uruguay": { "groupe": "H", "players": [
+    p("Sergio Rochet","Uruguay","GK",5.5), p("Fernando Muslera","Uruguay","GK",5.0),
+    p("Santiago Mele","Uruguay","GK",4.0), p("Guillermo Varela","Uruguay","DEF",4.0),
+    p("Ronald Araujo","Uruguay","DEF",6.0), p("José María Giménez","Uruguay","DEF",5.0),
+    p("Santiago Bueno","Uruguay","DEF",6.0), p("Sebastián Cáceres","Uruguay","DEF",5.0),
+    p("Mathías Olivera","Uruguay","DEF",5.5), p("Joaquín Piquerez","Uruguay","DEF",5.5),
+    p("Matías Viña","Uruguay","DEF",5.0), p("Manuel Ugarte","Uruguay","MID",6.5),
+    p("Emiliano Martínez","Uruguay","MID",5.0), p("Rodrigo Bentancur","Uruguay","MID",7.0),
+    p("Federico Valverde","Uruguay","MID",9.5), p("Agustín Canobbio","Uruguay","MID",5.0),
+    p("Juan Manuel Sanabria","Uruguay","MID",5.0), p("Giorgan de Arrascaeta","Uruguay","MID",5.0),
+    p("Nicolás de la Cruz","Uruguay","MID",6.5), p("Rodrigo Zalazar","Uruguay","MID",5.0),
+    p("Facundo Pellistri","Uruguay","FWD",5.5), p("Maximiliano Araújo","Uruguay","FWD",5.5),
+    p("Brian Rodríguez","Uruguay","FWD",5.5), p("Rodrigo Aguirre","Uruguay","FWD",5.0),
+    p("Federico Viñas","Uruguay","FWD",4.5), p("Darwin Núñez","Uruguay","FWD",7.5),
+], "coaches": [c("Marcelo Bielsa","Uruguay",3.5)]},
+
+# ────────────────────────── GROUPE I ─────────────────────────────────────────
+"France": { "groupe": "I", "players": [
+    p("Mike Maignan","France","GK",7.0), p("Brice Samba","France","GK",5.5),
+    p("Robin Risser","France","GK",4.0), p("Dayot Upamecano","France","DEF",6.0),
+    p("William Saliba","France","DEF",7.0), p("Lucas Digne","France","DEF",5.5),
+    p("Theo Hernandez","France","DEF",6.5), p("Lucas Hernandez","France","DEF",4.5),
+    p("Ibrahima Konaté","France","DEF",6.5), p("Jules Koundé","France","DEF",6.5),
+    p("Malo Gusto","France","DEF",5.0), p("Maxence Lacroix","France","DEF",4.5),
+    p("N'Golo Kanté","France","MID",6.0), p("Adrien Rabiot","France","MID",6.5),
+    p("Manu Koné","France","MID",6.5), p("Aurélien Tchouaméni","France","MID",8.5),
+    p("Warren Zaïre-Emery","France","MID",6.5), p("Maghnes Akliouche","France","FWD",6.5),
+    p("Kylian Mbappé","France","FWD",12.0), p("Ousmane Dembélé","France","FWD",11.5),
+    p("Michael Olise","France","FWD",10.5), p("Désiré Doué","France","FWD",9.0),
+    p("Bradley Barcola","France","FWD",9.5), p("Rayan Cherki","France","FWD",10.0),
+    p("Marcus Thuram","France","FWD",9.5), p("Jean-Philippe Mateta","France","FWD",7.0),
+], "coaches": [c("Didier Deschamps","France",4.0)]},
+
+"Sénégal": { "groupe": "I", "players": [
+    p("Édouard Mendy","Sénégal","GK",6.0), p("Mory Diaw","Sénégal","GK",5.0),
+    p("Yehvann Diouf","Sénégal","GK",4.5), p("Krépin Diatta","Sénégal","DEF",6.0),
+    p("Antoine Mendy","Sénégal","DEF",5.0), p("Kalidou Koulibaly","Sénégal","DEF",5.5),
+    p("El Hadji Malick Diouf","Sénégal","DEF",6.0), p("Mamadou Sarr","Sénégal","DEF",5.5),
+    p("Moussa Niakhaté","Sénégal","DEF",6.0), p("Abdoulaye Seck","Sénégal","DEF",4.0),
+    p("Ismaïl Jakobs","Sénégal","DEF",5.0), p("Idrissa Gana Gueye","Sénégal","MID",7.0),
+    p("Pape Gueye","Sénégal","MID",5.5), p("Lamine Camara","Sénégal","MID",6.5),
+    p("Habib Diarra","Sénégal","MID",6.5), p("Pathé Ciss","Sénégal","MID",5.0),
+    p("Pape Matar Sarr","Sénégal","MID",7.0), p("Bara Sapoko Ndiaye","Sénégal","MID",7.0),
+    p("Sadio Mané","Sénégal","FWD",9.0), p("Ismaïla Sarr","Sénégal","FWD",8.0),
+    p("Iliman Ndiaye","Sénégal","FWD",6.5), p("Assane Diao","Sénégal","FWD",5.5),
+    p("Ibrahim Mbaye","Sénégal","FWD",5.0), p("Nicolas Jackson","Sénégal","FWD",7.5),
+    p("Bamba Dieng","Sénégal","FWD",5.0), p("Chérif Ndiaye","Sénégal","FWD",4.5),
+], "coaches": [c("Pape Thiaw","Sénégal",3.0)]},
+
+"Norvège": { "groupe": "I", "players": [
+    p("Ørjan Nyland","Norvège","GK",5.0), p("Egil Selvik","Norvège","GK",4.5),
+    p("Sander Tangvik","Norvège","GK",4.5), p("Julian Ryerson","Norvège","DEF",5.5),
+    p("Kristoffer Ajer","Norvège","DEF",6.0), p("Leo Skiri Østigård","Norvège","DEF",5.5),
+    p("David Møller Wolfe","Norvège","DEF",5.0), p("Marcus Holmgren Pedersen","Norvège","DEF",5.0),
+    p("Torbjørn Heggem","Norvège","DEF",5.0), p("Fredrik Bjørkan","Norvège","DEF",4.5),
+    p("Henrik Falchener","Norvège","DEF",4.0), p("Sondre Langås","Norvège","DEF",4.0),
+    p("Martin Ødegaard","Norvège","MID",10.0), p("Sander Berge","Norvège","MID",6.5),
+    p("Patrick Berg","Norvège","MID",6.5), p("Kristian Thorstvedt","Norvège","MID",6.5),
+    p("Morten Thorsby","Norvège","MID",6.0), p("Thelo Aasgaard","Norvège","MID",6.0),
+    p("Andreas Schjelderup","Norvège","MID",7.0), p("Jens Petter Hauge","Norvège","MID",6.5),
+    p("Fredrik Aursnes","Norvège","MID",7.0), p("Erling Haaland","Norvège","FWD",12.0),
+    p("Alexander Sørloth","Norvège","FWD",8.5), p("Jørgen Strand Larsen","Norvège","FWD",7.5),
+    p("Oscar Bobb","Norvège","FWD",7.0), p("Antonio Nusa","Norvège","FWD",7.5),
+], "coaches": [c("Ståle Solbakken","Norvège",3.5)]},
+
+"Irak": { "groupe": "I", "players": [
+    p("Fahad Talib","Irak","GK",5.5), p("Jalal Hassan","Irak","GK",4.0),
+    p("Ahmed Basil","Irak","GK",4.0), p("Hussein Ali","Irak","DEF",4.5),
+    p("Manaf Younis","Irak","DEF",4.5), p("Zaid Tahseen","Irak","DEF",4.5),
+    p("Rebin Sulaka","Irak","DEF",4.0), p("Akam Hashem","Irak","DEF",4.5),
+    p("Merchas Doski","Irak","DEF",5.5), p("Ahmed Yahya","Irak","DEF",4.5),
+    p("Zaid Ismail","Irak","DEF",4.5), p("Frans Putros","Irak","DEF",5.0),
+    p("Mustafa Saadoon","Irak","DEF",4.5), p("Amir Al-Ammari","Irak","MID",5.0),
+    p("Kevin Yakob","Irak","MID",5.5), p("Zidane Iqbal","Irak","MID",6.5),
+    p("Aimar Sher","Irak","MID",5.0), p("Ibrahim Bayesh","Irak","MID",4.5),
+    p("Ahmed Qasem","Irak","MID",5.5), p("Youssef Amyn","Irak","MID",6.5),
+    p("Marko Farji","Irak","MID",6.0), p("Ali Jassim","Irak","FWD",7.5),
+    p("Ali Al-Hamadi","Irak","FWD",8.0), p("Ali Youssef","Irak","FWD",6.5),
+    p("Aymen Hussein","Irak","FWD",6.5), p("Mohanad Ali","Irak","FWD",6.0),
+], "coaches": [c("Graham Arnold","Irak",2.5)]},
+
+# ────────────────────────── GROUPE J ─────────────────────────────────────────
+"Argentine": { "groupe": "J", "players": [
+    p("Emiliano Martínez","Argentine","GK",7.0), p("Gerónimo Rulli","Argentine","GK",5.0),
+    p("Juan Musso","Argentine","GK",5.5), p("Gonzalo Montiel","Argentine","DEF",5.5),
+    p("Nahuel Molina","Argentine","DEF",6.0), p("Lisandro Martínez","Argentine","DEF",6.0),
+    p("Nicolás Otamendi","Argentine","DEF",5.0), p("Leonardo Balerdi","Argentine","DEF",5.0),
+    p("Cristian Romero","Argentine","DEF",6.5), p("Facundo Medina","Argentine","DEF",6.0),
+    p("Nicolás Tagliafico","Argentine","DEF",6.0), p("Leandro Paredes","Argentine","MID",6.5),
+    p("Rodrigo De Paul","Argentine","MID",8.5), p("Exequiel Palacios","Argentine","MID",8.0),
+    p("Enzo Fernández","Argentine","MID",9.0), p("Alexis Mac Allister","Argentine","MID",10.5),
+    p("Giovani Lo Celso","Argentine","MID",7.5), p("Valentín Barco","Argentine","MID",6.0),
+    p("Lionel Messi","Argentine","FWD",11.0), p("Nicolás Paz","Argentine","FWD",7.5),
+    p("Thiago Almada","Argentine","FWD",6.0), p("Nicolás González","Argentine","FWD",7.5),
+    p("Giuliano Simeone","Argentine","FWD",7.0), p("Lautaro Martínez","Argentine","FWD",10.5),
+    p("José Manuel López","Argentine","FWD",6.0), p("Julián Álvarez","Argentine","FWD",11.0),
+], "coaches": [c("Lionel Scaloni","Argentine",4.0)]},
+
+"Algérie": { "groupe": "J", "players": [
+    p("Luca Zidane","Algérie","GK",4.5), p("Oussama Benbot","Algérie","GK",4.0),
+    p("Melvin Mastil","Algérie","GK",4.0), p("Rafik Belghali","Algérie","DEF",5.5),
+    p("Samir Chergui","Algérie","DEF",5.0), p("Rayan Aït-Nouri","Algérie","DEF",6.5),
+    p("Jaouen Hadjam","Algérie","DEF",6.0), p("Aïssa Mandi","Algérie","DEF",5.0),
+    p("Ramy Bensebaïni","Algérie","DEF",6.0), p("Zineddine Belaïd","Algérie","DEF",5.5),
+    p("Achref Abada","Algérie","DEF",4.5), p("Mohamed Amine Tougaï","Algérie","DEF",5.0),
+    p("Nabil Bentaleb","Algérie","MID",5.5), p("Hicham Boudaoui","Algérie","MID",6.0),
+    p("Houssem Aouar","Algérie","MID",6.0), p("Farès Chaïbi","Algérie","MID",6.5),
+    p("Ibrahim Maza","Algérie","MID",7.0), p("Yacine Titraoui","Algérie","MID",4.5),
+    p("Ramiz Zerrouki","Algérie","MID",5.5), p("Mohamed Amoura","Algérie","FWD",7.5),
+    p("Nadhir Benbouali","Algérie","FWD",5.5), p("Adil Boulbina","Algérie","FWD",5.0),
+    p("Farès Ghedjemis","Algérie","FWD",5.0), p("Amine Gouiri","Algérie","FWD",7.0),
+    p("Anis Hadj Moussa","Algérie","FWD",6.5), p("Riyad Mahrez","Algérie","FWD",8.0),
+], "coaches": [c("Vladimir Petkovic","Algérie",1.5)]},
+
+"Autriche": { "groupe": "J", "players": [
+    p("Patrick Pentz","Autriche","GK",5.0), p("Alexander Schlager","Autriche","GK",5.5),
+    p("Florian Wiegele","Autriche","GK",4.5), p("David Affengruber","Autriche","DEF",4.5),
+    p("David Alaba","Autriche","DEF",6.5), p("Kevin Danso","Autriche","DEF",6.5),
+    p("Marco Friedl","Autriche","DEF",5.5), p("Philipp Lienhart","Autriche","DEF",5.5),
+    p("Phillipp Mwene","Autriche","DEF",4.5), p("Stefan Posch","Autriche","DEF",5.5),
+    p("Alexander Prass","Autriche","DEF",5.5), p("Michael Svoboda","Autriche","DEF",5.0),
+    p("Christoph Baumgartner","Autriche","MID",7.5), p("Carney Chukwuemeka","Autriche","MID",7.0),
+    p("Florian Grillitsch","Autriche","MID",6.5), p("Konrad Laimer","Autriche","MID",7.0),
+    p("Marcel Sabitzer","Autriche","MID",7.0), p("Xaver Schlager","Autriche","MID",7.5),
+    p("Nicolas Seiwald","Autriche","MID",7.0), p("Romano Schmid","Autriche","MID",6.5),
+    p("Alessandro Schöpf","Autriche","MID",5.5), p("Paul Wanner","Autriche","MID",6.0),
+    p("Patrick Wimmer","Autriche","FWD",6.5), p("Marko Arnautović","Autriche","FWD",8.0),
+    p("Michael Gregoritsch","Autriche","FWD",7.0), p("Sasa Kalajdzic","Autriche","FWD",6.5),
+], "coaches": [c("Ralf Rangnick","Autriche",2.0)]},
+
+"Jordanie": { "groupe": "J", "players": [
+    p("Yazid Abulaila","Jordanie","GK",5.0), p("Abdallah Al Fakhouri","Jordanie","GK",4.5),
+    p("Nour Bani Attiah","Jordanie","GK",4.5), p("Mohammad Abualnadi","Jordanie","DEF",5.5),
+    p("Husam Abu Dahab","Jordanie","DEF",5.0), p("Mohammad Abu Hashish","Jordanie","DEF",5.0),
+    p("Yazan Al Arab","Jordanie","DEF",5.5), p("Abdallah Nasib","Jordanie","DEF",5.5),
+    p("Saleem Obaid","Jordanie","DEF",5.0), p("Ehsan Haddad","Jordanie","DEF",5.0),
+    p("Saed Al-Rosan","Jordanie","DEF",5.5), p("Anas Banawi","Jordanie","DEF",5.5),
+    p("Mohannad Abu Taha","Jordanie","DEF",5.5), p("Mohammad Al Dawoud","Jordanie","MID",5.5),
+    p("Nizar Al Rashdan","Jordanie","MID",5.5), p("Noor Al Rawabdeh","Jordanie","MID",5.5),
+    p("Rajaei Ayed","Jordanie","MID",5.0), p("Amer Jamous","Jordanie","MID",5.5),
+    p("Ibrahim Sadeh","Jordanie","MID",5.0), p("Mahmoud Al-Mardi","Jordanie","MID",5.5),
+    p("Mousa Al Tamari","Jordanie","FWD",8.5), p("Odeh Al-Fakhouri","Jordanie","FWD",6.0),
+    p("Mohammad Abu Zrayq","Jordanie","FWD",6.5), p("Ali Azaizeh","Jordanie","FWD",6.0),
+    p("Ali Olwan","Jordanie","FWD",5.5), p("Ibrahim Sabra","Jordanie","FWD",6.0),
+], "coaches": [c("Jamal Sellami","Jordanie",1.0)]},
+
+# ────────────────────────── GROUPE K ─────────────────────────────────────────
+"Portugal": { "groupe": "K", "players": [
+    p("Diogo Costa","Portugal","GK",7.0), p("José Sá","Portugal","GK",6.5),
+    p("Rui Silva","Portugal","GK",5.5), p("Diogo Dalot","Portugal","DEF",6.0),
+    p("Matheus Nunes","Portugal","DEF",6.0), p("Nélson Semedo","Portugal","DEF",5.0),
+    p("João Cancelo","Portugal","DEF",6.0), p("Nuno Mendes","Portugal","DEF",7.0),
+    p("Gonçalo Inácio","Portugal","DEF",5.5), p("Renato Veiga","Portugal","DEF",5.5),
+    p("Rúben Dias","Portugal","DEF",6.5), p("Tomás Araújo","Portugal","DEF",4.5),
+    p("Rúben Neves","Portugal","MID",5.5), p("Samuel Costa","Portugal","MID",5.0),
+    p("João Neves","Portugal","MID",8.0), p("Vitinha","Portugal","MID",11.0),
+    p("Bruno Fernandes","Portugal","MID",11.0), p("Bernardo Silva","Portugal","MID",8.5),
+    p("João Félix","Portugal","FWD",7.5), p("Francisco Trincão","Portugal","FWD",6.0),
+    p("Francisco Conceição","Portugal","FWD",7.0), p("Pedro Neto","Portugal","FWD",7.5),
+    p("Rafael Leão","Portugal","FWD",11.0), p("Gonçalo Guedes","Portugal","FWD",7.0),
+    p("Gonçalo Ramos","Portugal","FWD",8.0), p("Cristiano Ronaldo","Portugal","FWD",11.0),
+], "coaches": [c("Roberto Martinez","Portugal",4.0)]},
+
+"RD Congo": { "groupe": "K", "players": [
+    p("Timothy Fayulu","RD Congo","GK",4.5), p("Lionel Mpasi","RD Congo","GK",5.0),
+    p("Mike Epolo","RD Congo","GK",4.0), p("Aaron Wan-Bissaka","RD Congo","DEF",5.0),
+    p("Gédéon Kalulu","RD Congo","DEF",5.0), p("Joris Kayembe","RD Congo","DEF",4.5),
+    p("Arthur Masuaku","RD Congo","DEF",5.5), p("Steve Kapuadi","RD Congo","DEF",5.0),
+    p("Rocky Bushiri","RD Congo","DEF",5.0), p("Axel Tuanzebe","RD Congo","DEF",5.5),
+    p("Chancel Mbemba","RD Congo","DEF",5.0), p("Dylan Batubinsika","RD Congo","DEF",5.0),
+    p("Noah Sadiki","RD Congo","MID",7.5), p("Samuel Moutoussamy","RD Congo","MID",5.0),
+    p("Edo Kayembe","RD Congo","MID",5.5), p("Nathan Mukau","RD Congo","MID",6.0),
+    p("Charles Pickel","RD Congo","MID",5.5), p("Ngal'ayel Mukau Mbuku","RD Congo","MID",6.0),
+    p("Brian Cipenga","RD Congo","MID",5.0), p("Théo Bongonda","RD Congo","MID",6.5),
+    p("Gaël Kakuta","RD Congo","MID",6.0), p("Meschack Elia","RD Congo","FWD",7.0),
+    p("Fiston Mayele","RD Congo","FWD",6.5), p("Cédric Bakambu","RD Congo","FWD",7.5),
+    p("Simon Banza","RD Congo","FWD",7.5), p("Yoane Wissa","RD Congo","FWD",8.5),
+], "coaches": [c("Sebastien Desabre","RD Congo",1.5)]},
+
+"Ouzbékistan": { "groupe": "K", "players": [
+    p("Utkir Yusupov","Ouzbékistan","GK",5.5), p("Abduvohid Nematov","Ouzbékistan","GK",5.0),
+    p("Botirali Ergashev","Ouzbékistan","GK",5.0), p("Rustam Ashurmatov","Ouzbékistan","DEF",5.5),
+    p("Farrukh Sayfiev","Ouzbékistan","DEF",4.5), p("Khojiakbar Alijonov","Ouzbékistan","DEF",4.0),
+    p("Sherzod Nasrullaev","Ouzbékistan","DEF",4.0), p("Umar Eshmurodov","Ouzbékistan","DEF",4.5),
+    p("Abdukodir Khusanov","Ouzbékistan","DEF",5.0), p("Abdulla Abdullaev","Ouzbékistan","DEF",4.0),
+    p("Bekhruz Karimov","Ouzbékistan","DEF",4.0), p("Jakhongir Urozov","Ouzbékistan","DEF",4.0),
+    p("Avazbek Ulmasaliev","Ouzbékistan","DEF",4.5), p("Otabek Shukurov","Ouzbékistan","MID",6.0),
+    p("Jaloliddin Masharipov","Ouzbékistan","MID",6.5), p("Odiljon Hamrobekov","Ouzbékistan","MID",6.0),
+    p("Oston Urunov","Ouzbékistan","MID",6.5), p("Jamshid Iskanderov","Ouzbékistan","MID",5.5),
+    p("Dostonbek Khamdamov","Ouzbékistan","MID",5.5), p("Abbosbek Fayzullaev","Ouzbékistan","MID",7.5),
+    p("Akmal Mozgovoy","Ouzbékistan","MID",5.5), p("Azizjon Ganiev","Ouzbékistan","MID",5.5),
+    p("Sherzod Esanov","Ouzbékistan","MID",5.0), p("Eldor Shomurodov","Ouzbékistan","FWD",7.5),
+    p("Igor Sergeev","Ouzbékistan","FWD",7.0), p("Azizbek Amonov","Ouzbékistan","FWD",5.0),
+], "coaches": [c("Fabio Cannavaro","Ouzbékistan",1.0)]},
+
+"Colombie": { "groupe": "K", "players": [
+    p("Camilo Vargas","Colombie","GK",5.0), p("David Ospina","Colombie","GK",6.0),
+    p("Álvaro Montero","Colombie","GK",5.0), p("Johan Mojica","Colombie","DEF",5.5),
+    p("Deiver Machado","Colombie","DEF",5.0), p("Daniel Muñoz","Colombie","DEF",6.5),
+    p("Santiago Arias","Colombie","DEF",5.0), p("Yerry Mina","Colombie","DEF",6.0),
+    p("Davinson Sánchez","Colombie","DEF",6.5), p("Jhon Lucumí","Colombie","DEF",6.0),
+    p("Willer Ditta","Colombie","DEF",4.5), p("James Rodríguez","Colombie","MID",6.0),
+    p("Jefferson Lerma","Colombie","MID",7.5), p("Richard Ríos","Colombie","MID",7.5),
+    p("Juan Fernando Quintero","Colombie","MID",7.5), p("Jorge Carrascal","Colombie","MID",6.5),
+    p("Kevin Castaño","Colombie","MID",6.0), p("Jaminton Campaz","Colombie","MID",6.0),
+    p("Luis Díaz","Colombie","FWD",11.5), p("Carlos Andrés Gómez","Colombie","FWD",6.5),
+    p("Jhon Córdoba","Colombie","FWD",7.5), p("Juan Camilo Hernández","Colombie","FWD",8.0),
+    p("Jhon Arias","Colombie","FWD",7.5),
+], "coaches": [c("Néstor Lorenzo","Colombie",3.0)]},
+
+# ────────────────────────── GROUPE L ─────────────────────────────────────────
+"Angleterre": { "groupe": "L", "players": [
+    p("Jordan Pickford","Angleterre","GK",6.5), p("Dean Henderson","Angleterre","GK",5.5),
+    p("James Trafford","Angleterre","GK",5.0), p("Reece James","Angleterre","DEF",6.5),
+    p("Tino Livramento","Angleterre","DEF",6.0), p("Marc Guéhi","Angleterre","DEF",6.0),
+    p("Ezri Konsa","Angleterre","DEF",5.5), p("John Stones","Angleterre","DEF",5.0),
+    p("Jarell Quansah","Angleterre","DEF",5.5), p("Nico O'Reilly","Angleterre","DEF",5.0),
+    p("Dan Burn","Angleterre","DEF",4.5), p("Djed Spence","Angleterre","DEF",5.0),
+    p("Declan Rice","Angleterre","MID",9.5), p("Elliot Anderson","Angleterre","MID",6.5),
+    p("Jude Bellingham","Angleterre","MID",10.0), p("Jordan Henderson","Angleterre","MID",6.5),
+    p("Morgan Rogers","Angleterre","MID",7.0), p("Kobbie Mainoo","Angleterre","MID",8.0),
+    p("Eberechi Eze","Angleterre","MID",8.5), p("Harry Kane","Angleterre","FWD",12.0),
+    p("Ivan Toney","Angleterre","FWD",6.5), p("Ollie Watkins","Angleterre","FWD",7.5),
+    p("Bukayo Saka","Angleterre","FWD",10.0), p("Noni Madueke","Angleterre","FWD",7.5),
+    p("Marcus Rashford","Angleterre","FWD",8.0), p("Anthony Gordon","Angleterre","FWD",7.5),
+], "coaches": [c("Thomas Tuchel","Angleterre",4.0)]},
+
+"Croatie": { "groupe": "L", "players": [
+    p("Dominik Livakovic","Croatie","GK",6.5), p("Dominik Kotarski","Croatie","GK",5.5),
+    p("Ivor Pandur","Croatie","GK",4.5), p("Josko Gvardiol","Croatie","DEF",7.0),
+    p("Duje Caleta-Car","Croatie","DEF",5.5), p("Josip Sutalo","Croatie","DEF",6.0),
+    p("Josip Stanisic","Croatie","DEF",6.0), p("Marin Pongracic","Croatie","DEF",7.5),
+    p("Martin Erlic","Croatie","DEF",5.0), p("Luka Vuskovic","Croatie","DEF",5.0),
+    p("Luka Modric","Croatie","MID",8.0), p("Mateo Kovacic","Croatie","MID",8.5),
+    p("Mario Pasalic","Croatie","MID",7.0), p("Nikola Vlasic","Croatie","MID",7.5),
+    p("Luka Sucic","Croatie","MID",7.5), p("Martin Baturina","Croatie","MID",7.5),
+    p("Kristijan Jakic","Croatie","MID",6.5), p("Petar Sucic","Croatie","MID",6.0),
+    p("Nikola Moro","Croatie","MID",6.5), p("Toni Fruk","Croatie","MID",5.5),
+    p("Ivan Perisic","Croatie","FWD",8.0), p("Andrej Kramaric","Croatie","FWD",8.5),
+    p("Ante Budimir","Croatie","FWD",6.5), p("Marco Pasalic","Croatie","FWD",5.0),
+    p("Petar Musa","Croatie","FWD",6.5), p("Igor Matanovic","Croatie","FWD",6.0),
+], "coaches": [c("Zlatko Dalić","Croatie",3.0)]},
+
+"Ghana": { "groupe": "L", "players": [
+    p("Benjamin Asare","Ghana","GK",4.0), p("Lawrence Ati-Zigi","Ghana","GK",5.0),
+    p("Joseph Anang","Ghana","GK",4.5), p("Baba Abdul Rahman","Ghana","DEF",5.0),
+    p("Derrick Luckassen","Ghana","DEF",4.0), p("Gideon Mensah","Ghana","DEF",5.0),
+    p("Marvin Senaya","Ghana","DEF",4.5), p("Alidu Seidu","Ghana","DEF",5.5),
+    p("Abdul Mumin","Ghana","DEF",5.0), p("Jerome Opoku","Ghana","DEF",5.5),
+    p("Jonas Adjetey","Ghana","DEF",5.5), p("Kojo Oppong Peprah","Ghana","DEF",5.0),
+    p("Thomas Partey","Ghana","MID",6.0), p("Kamaldeen Sulemana","Ghana","MID",8.0),
+    p("Kwasi Sibo","Ghana","MID",5.5), p("Augustine Boakye","Ghana","MID",5.5),
+    p("Caleb Yirenkyi","Ghana","MID",5.5), p("Abdul Fatawu Issahaku","Ghana","MID",7.5),
+    p("Elisha Owusu","Ghana","MID",6.0), p("Christopher Bonsu Baah","Ghana","FWD",6.5),
+    p("Ernest Nuamah","Ghana","FWD",7.0), p("Antoine Semenyo","Ghana","FWD",8.0),
+    p("Brandon Thomas-Asante","Ghana","FWD",6.0), p("Prince Kwabena Adu","Ghana","FWD",5.0),
+    p("Iñaki Williams","Ghana","FWD",8.5), p("Jordan Ayew","Ghana","FWD",7.0),
+], "coaches": [c("Carlos Queiroz","Ghana",1.0)]},
+
+"Panama": { "groupe": "L", "players": [
+    p("Orlando Mosquera","Panama","GK",4.5), p("Luis Mejía","Panama","GK",4.0),
+    p("César Samudio","Panama","GK",4.0), p("César Blackman","Panama","DEF",4.5),
+    p("Jorge Gutiérrez","Panama","DEF",4.0), p("Amir Murillo","Panama","DEF",5.5),
+    p("Fidel Escobar","Panama","DEF",5.0), p("Andrés Andrade","Panama","DEF",5.0),
+    p("Edgardo Fariña","Panama","DEF",5.0), p("José Córdoba","Panama","DEF",5.5),
+    p("Eric Davis","Panama","DEF",5.0), p("Jiovani Ramos","Panama","DEF",4.5),
+    p("Roderick Miller","Panama","DEF",4.5), p("Aníbal Godoy","Panama","MID",6.5),
+    p("Adalberto Carrasquilla","Panama","MID",7.0), p("Carlos Harvey","Panama","MID",6.0),
+    p("Cristian Martínez","Panama","MID",5.5), p("José Luis Rodríguez","Panama","MID",5.5),
+    p("Cesar Yanis","Panama","MID",5.5), p("Yoel Bárcenas","Panama","MID",6.5),
+    p("Alberto Quintero","Panama","MID",6.0), p("Azarías Londoño","Panama","MID",5.0),
+    p("Ismael Díaz","Panama","FWD",7.5), p("Cecilio Waterman","Panama","FWD",6.5),
+    p("José Fajardo","Panama","FWD",6.0), p("Tomás Rodríguez","Panama","FWD",6.0),
+], "coaches": [c("Thomas Christiansen","Panama",1.0)]},
+
+}  # fin EFFECTIFS
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  FONCTIONS D'INSERTION
+# ══════════════════════════════════════════════════════════════════════════════
+
+def insert_nation(nation: str, data: dict, force: bool = False) -> dict:
+    """
+    Insère tous les joueurs et entraîneurs d'une nation.
+    Si force=False, ignore les doublons (name + nationality).
+    """
+    players  = data["players"]
+    coaches  = data.get("coaches", [])
+    groupe   = data.get("groupe", "?")
+    ins_p = ins_c = skip_p = skip_c = 0
+    errors = []
+
+    # ── Joueurs ────────────────────────────────────────────────────────────────
+    for player in players:
+        try:
+            if not force:
+                existing = (sb.table("players")
+                    .select("id")
+                    .eq("name", player["name"])
+                    .eq("nationality", player["nationality"])
+                    .execute())
+                if existing.data:
+                    skip_p += 1
+                    continue
+
+            sb.table("players").insert({
+                "name":        player["name"],
+                "nationality": player["nationality"],
+                "position":    player["position"],
+                "team":        player["team"],
+                "price":       player["price"],
+                "stats":       {},
+            }).execute()
+            ins_p += 1
+
+        except Exception as e:
+            errors.append(f"  ⚠  {player['name']}: {str(e)[:80]}")
+
+    # ── Entraîneurs ────────────────────────────────────────────────────────────
+    for coach in coaches:
+        try:
+            if not force:
+                existing = (sb.table("coaches")
+                    .select("id")
+                    .eq("name", coach["name"])
+                    .eq("nationality", coach["nationality"])
+                    .execute())
+                if existing.data:
+                    skip_c += 1
+                    continue
+
+            sb.table("coaches").insert({
+                "name":        coach["name"],
+                "nationality": coach["nationality"],
+                "team":        coach["team"],
+                "price":       coach["price"],
+                "forbidden_players_nationality": [coach["nationality"]],
+            }).execute()
+            ins_c += 1
+
+        except Exception as e:
+            errors.append(f"  ⚠  Coach {coach['name']}: {str(e)[:80]}")
+
+    return {
+        "groupe": groupe,
+        "ins_p": ins_p, "ins_c": ins_c,
+        "skip_p": skip_p, "skip_c": skip_c,
+        "errors": errors,
+    }
+
+
+def run(filter_groupe: str = None, filter_nation: str = None, force: bool = False):
+    teams = {
+        k: v for k, v in EFFECTIFS.items()
+        if (filter_groupe is None or v["groupe"] == filter_groupe)
+        and (filter_nation is None or k == filter_nation)
+    }
+
+    if not teams:
+        print("❌ Aucune équipe trouvée pour ce filtre.")
+        sys.exit(1)
+
+    total_p = total_c = total_skip = 0
+    all_errors = []
+
+    print(f"\n🚀  Insertion directe Supabase — {len(teams)} équipe(s)\n")
+    print(f"{'Nation':<25} {'Grp':<5} {'Joueurs':>8} {'Coach':>7} {'Doublons':>10}   Statut")
+    print("─" * 70)
+
+    for nation, data in teams.items():
+        res = insert_nation(nation, data, force=force)
+
+        total_p    += res["ins_p"]
+        total_c    += res["ins_c"]
+        total_skip += res["skip_p"] + res["skip_c"]
+        all_errors.extend(res["errors"])
+
+        status = "✅"
+        if res["errors"]:
+            status = f"⚠  {len(res['errors'])} err"
+        elif res["ins_p"] + res["ins_c"] == 0:
+            status = "⏭  déjà importé"
+
+        print(f"{nation:<25} {res['groupe']:<5} {res['ins_p']:>8} {res['ins_c']:>7} "
+              f"{res['skip_p']+res['skip_c']:>10}   {status}")
+
+        time.sleep(0.05)   # petit délai pour ne pas saturer l'API Supabase
+
+    print("─" * 70)
+    print(f"\n📊  RÉSUMÉ")
+    print(f"   ✅  {total_p} joueur(s) insérés")
+    print(f"   🧑‍💼  {total_c} entraîneur(s) inséré(s)")
+    print(f"   ⏭   {total_skip} doublon(s) ignoré(s)")
+
+    if all_errors:
+        print(f"\n⚠  {len(all_errors)} erreur(s) :")
+        for e in all_errors[:15]:
+            print(e)
+        if len(all_errors) > 15:
+            print(f"   ... et {len(all_errors) - 15} autres")
+
+    print()
+
+
+# ── CLI ────────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Insertion directe des effectifs CdM 2026 dans Supabase"
+    )
+    parser.add_argument("--groupe",  help="Filtrer par groupe (ex: C, J, L)")
+    parser.add_argument("--nation",  help="Filtrer par nation (ex: France)")
+    parser.add_argument("--force",   action="store_true",
+                        help="Réinsérer même les doublons (écrase rien, crée des dupliqués)")
+    args = parser.parse_args()
+
+    run(
+        filter_groupe=args.groupe,
+        filter_nation=args.nation,
+        force=args.force,
+    )

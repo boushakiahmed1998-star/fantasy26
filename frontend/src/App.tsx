@@ -5,6 +5,8 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Fantasy from './pages/Fantasy'
 import Admin from './pages/Admin'
+import Pronos from './pages/Pronos'
+import Ranking from './pages/Ranking'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 
@@ -30,9 +32,13 @@ function App() {
           <AdminRoute><Admin /></AdminRoute>
         } />
 
-        {/* Phase 5 — à venir */}
-        {/* <Route path="/pronos"  element={<ProtectedRoute><Pronos /></ProtectedRoute>} /> */}
-        {/* <Route path="/ranking" element={<ProtectedRoute><Ranking /></ProtectedRoute>} /> */}
+        {/* Phase 5 — Pronostics & Classement */}
+        <Route path="/pronos" element={
+          <ProtectedRoute><Pronos /></ProtectedRoute>
+        } />
+        <Route path="/ranking" element={
+          <ProtectedRoute><Ranking /></ProtectedRoute>
+        } />
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

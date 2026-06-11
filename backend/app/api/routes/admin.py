@@ -316,3 +316,23 @@ async def admin_stats(_admin=Depends(require_admin)):
         "positions": positions,
         "teams_count": len(teams),
     }
+
+@router.get("/team-stats")
+async def team_stats(_admin=Depends(require_admin)):
+    sb = get_supabase()
+    players = sb.table("players").select("team, position").execute().data
+    coaches = sb.table("coaches").select("team").execute().data
+
+    stats: dict[str, dict] = {}
+    for p in players:
+        key = p["team"]
+        if key not in stats:
+            stats[key] = {"players": 0, "coaches": 0}
+        stats[key]["players"] += 1
+    for c in coaches:
+        key = c["team"]
+        if key not in stats:
+            stats[key] = {"players": 0, "coaches": 0}
+        stats[key]["coaches"] += 1
+
+    return {"stats": stats}

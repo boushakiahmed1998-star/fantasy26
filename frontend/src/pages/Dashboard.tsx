@@ -36,7 +36,7 @@ interface RankEntry {
 
 interface PronoResult {
   total_points: number
-  pronos: Array<{ locked: boolean; match?: { status: string } }>
+  pronos: Array<{ locked: boolean; points: number; match?: { status: string } }>
 }
 
 // ── Flag map ───────────────────────────────────────────────────────────────────
@@ -102,7 +102,6 @@ function NextMatchWidget({ match }: { match: Match }) {
         position: 'relative', overflow: 'hidden',
       }}
     >
-      {/* Live badge */}
       {isLive && (
         <div style={{
           position: 'absolute', top: 10, right: 12,
@@ -127,13 +126,11 @@ function NextMatchWidget({ match }: { match: Match }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        {/* Équipe domicile */}
         <div style={{ flex: 1, textAlign: 'right' }}>
           <div style={{ fontSize: 28 }}>{flag(match.team_home)}</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#f5f5f0', marginTop: 4 }}>{match.team_home}</div>
         </div>
 
-        {/* Score ou horaire */}
         <div style={{ textAlign: 'center', flexShrink: 0, minWidth: 80 }}>
           {(isLive || isFinished) && match.score_home !== null && match.score_away !== null ? (
             <div style={{
@@ -157,7 +154,6 @@ function NextMatchWidget({ match }: { match: Match }) {
           )}
         </div>
 
-        {/* Équipe extérieur */}
         <div style={{ flex: 1, textAlign: 'left' }}>
           <div style={{ fontSize: 28 }}>{flag(match.team_away)}</div>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#f5f5f0', marginTop: 4 }}>{match.team_away}</div>
@@ -229,7 +225,6 @@ function RankingWidget({ entries, myId, loading }: { entries: RankEntry[]; myId:
             )
           })}
 
-          {/* Ma position si hors top 5 */}
           {myEntry && !myInTop5 && (
             <>
               <div style={{ textAlign: 'center', fontSize: 11, color: '#4a5a4c', padding: '2px 0' }}>···</div>
@@ -284,7 +279,6 @@ function StatCard({ icon, label, value, sub, color = '#c9a84c', onClick, pulse }
         position: 'relative', overflow: 'hidden',
       }}
     >
-      {/* Accent glow */}
       {pulse && (
         <div style={{
           position: 'absolute', top: -20, right: -20,
@@ -312,7 +306,6 @@ export default function Dashboard() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
 
-  // ── État ─────────────────────────────────────────────────────────────────────
   const [fantasyTeam, setFantasyTeam] = useState<FantasyTeam | null>(null)
   const [pronoData, setPronoData] = useState<PronoResult | null>(null)
   const [rankEntries, setRankEntries] = useState<RankEntry[]>([])
@@ -322,9 +315,7 @@ export default function Dashboard() {
   const [loadingRank, setLoadingRank] = useState(true)
   const [loadingAll, setLoadingAll] = useState(true)
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
 
-  // ── Chargement ────────────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     try {
       const [teamRes, pronoRes, rankRes, matchRes] = await Promise.allSettled([
@@ -337,11 +328,9 @@ export default function Dashboard() {
       if (teamRes.status === 'fulfilled') {
         setFantasyTeam(teamRes.value.data.team || null)
       }
-
       if (pronoRes.status === 'fulfilled') {
         setPronoData(pronoRes.value.data)
       }
-
       if (rankRes.status === 'fulfilled') {
         const entries: RankEntry[] = rankRes.value.data.ranking || []
         setRankEntries(entries)
@@ -349,13 +338,11 @@ export default function Dashboard() {
         const me = entries.find(e => e.user_id === user?.id)
         if (me) setMyRank(me.rank)
       }
-
       if (matchRes.status === 'fulfilled') {
         const matches: Match[] = matchRes.value.data.matches || []
         if (matches.length > 0) setNextMatch(matches[0])
       }
 
-      // Check for live match
       const liveRes = await axios.get('/api/v1/matches?status=live').catch(() => null)
       if (liveRes?.data?.matches?.length > 0) {
         setLiveMatch(liveRes.data.matches[0])
@@ -377,7 +364,6 @@ export default function Dashboard() {
     return () => clearInterval(interval)
   }, [load])
 
-  // ── Computed ──────────────────────────────────────────────────────────────────
   const fantasyPoints = fantasyTeam?.points ?? 0
   const pronoPoints = pronoData?.total_points ?? 0
   const totalPoints = fantasyPoints + pronoPoints
@@ -385,9 +371,8 @@ export default function Dashboard() {
   const budgetLeft = fantasyTeam ? (100 - (fantasyTeam.budget_used || 0)).toFixed(1) : '—'
   const displayMatch = liveMatch || nextMatch
 
-  // ── Greeting ──────────────────────────────────────────────────────────────────
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bonjour' : 'Bonsoir'
+  const greeting = hour < 18 ? 'Bonjour' : 'Bonsoir'
 
   return (
     <div style={{
@@ -411,11 +396,11 @@ export default function Dashboard() {
           <span style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.3rem', color: '#c9a84c', letterSpacing: '0.04em' }}>
             🏆 Fantasy Boulzazen
           </span>
-          {/* Desktop nav */}
           <nav style={{ display: 'flex', gap: 4 }} className="desktop-nav">
             {[
               { to: '/dashboard', label: 'Dashboard', active: true },
               { to: '/fantasy', label: '⚽ Équipe' },
+              { to: '/transfers', label: '🔄 Transferts' },
               { to: '/pronos', label: '🎯 Pronos' },
               { to: '/ranking', label: '📊 Classement' },
             ].map(({ to, label, active }) => (
@@ -457,7 +442,7 @@ export default function Dashboard() {
       {/* ── Body ── */}
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '2rem 1.5rem' }}>
 
-        {/* ── Hero greeting ── */}
+        {/* Hero greeting */}
         <div style={{ marginBottom: '2rem' }}>
           <h1 style={{
             fontFamily: "'Bebas Neue', sans-serif",
@@ -485,7 +470,6 @@ export default function Dashboard() {
                   borderRadius: 6, padding: '3px 10px',
                   fontSize: 12, color: '#c9a84c', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 6,
-                  animation: 'fadeIn 0.3s ease',
                 }}
               >
                 <span style={{
@@ -500,7 +484,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Grille principale ── */}
+        {/* Grille principale */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
@@ -510,13 +494,7 @@ export default function Dashboard() {
 
           {/* Colonne stats */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-            {/* Stats KPIs */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: 10,
-            }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <StatCard
                 icon="🏅"
                 label="Points Fantasy"
@@ -551,7 +529,7 @@ export default function Dashboard() {
               />
             </div>
 
-            {/* Budget restant */}
+            {/* Budget */}
             <div style={{
               background: 'rgba(15,45,20,0.7)',
               border: '1px solid rgba(255,255,255,0.07)',
@@ -586,6 +564,9 @@ export default function Dashboard() {
               <button onClick={() => navigate('/fantasy')} style={quickBtn('#3b82f6')}>
                 ⚽ Composer mon équipe
               </button>
+              <button onClick={() => navigate('/transfers')} style={quickBtn('#f59e0b')}>
+                🔄 Transferts
+              </button>
               <button onClick={() => navigate('/pronos')} style={quickBtn('#c9a84c')}>
                 🎯 Pronostiquer
               </button>
@@ -600,10 +581,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Colonne droite : prochain match + classement */}
+          {/* Colonne droite */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-            {/* Prochain match / Match en cours */}
             {displayMatch ? (
               <NextMatchWidget match={displayMatch} />
             ) : (
@@ -617,8 +596,6 @@ export default function Dashboard() {
                 <div style={{ fontSize: 13 }}>Aucun match programmé</div>
               </div>
             )}
-
-            {/* Widget classement */}
             <RankingWidget
               entries={rankEntries}
               myId={user?.id || ''}
@@ -627,7 +604,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ── Activité récente (derniers pronos) ── */}
+        {/* Activité récente */}
         {pronoData?.pronos && pronoData.pronos.filter(p => p.locked).length > 0 && (
           <div style={{
             background: 'rgba(15,45,20,0.6)',
@@ -646,8 +623,7 @@ export default function Dashboard() {
               <div style={{
                 background: 'rgba(16,185,129,0.08)',
                 border: '1px solid rgba(16,185,129,0.2)',
-                borderRadius: 8, padding: '8px 14px',
-                fontSize: 13,
+                borderRadius: 8, padding: '8px 14px', fontSize: 13,
               }}>
                 <span style={{ color: '#10b981', fontWeight: 600 }}>{pronoData.pronos.filter((p: any) => p.points >= 5).length}</span>
                 <span style={{ color: '#8a9a8c', marginLeft: 5 }}>scores exacts (+5pts)</span>
@@ -655,8 +631,7 @@ export default function Dashboard() {
               <div style={{
                 background: 'rgba(59,130,246,0.08)',
                 border: '1px solid rgba(59,130,246,0.2)',
-                borderRadius: 8, padding: '8px 14px',
-                fontSize: 13,
+                borderRadius: 8, padding: '8px 14px', fontSize: 13,
               }}>
                 <span style={{ color: '#3b82f6', fontWeight: 600 }}>{pronoData.pronos.filter((p: any) => p.points === 2).length}</span>
                 <span style={{ color: '#8a9a8c', marginLeft: 5 }}>bonnes issues (+2pts)</span>
@@ -664,8 +639,7 @@ export default function Dashboard() {
               <div style={{
                 background: 'rgba(239,68,68,0.06)',
                 border: '1px solid rgba(239,68,68,0.15)',
-                borderRadius: 8, padding: '8px 14px',
-                fontSize: 13,
+                borderRadius: 8, padding: '8px 14px', fontSize: 13,
               }}>
                 <span style={{ color: '#ef4444', fontWeight: 600 }}>{pronoData.pronos.filter((p: any) => p.points === 0 && p.locked).length}</span>
                 <span style={{ color: '#8a9a8c', marginLeft: 5 }}>mauvais pronostics</span>

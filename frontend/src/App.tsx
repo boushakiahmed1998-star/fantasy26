@@ -7,6 +7,7 @@ import Fantasy from './pages/Fantasy'
 import Admin from './pages/Admin'
 import Pronos from './pages/Pronos'
 import Ranking from './pages/Ranking'
+import Transfers from './pages/Transfers'
 import ProtectedRoute from './components/ProtectedRoute'
 import AdminRoute from './components/AdminRoute'
 
@@ -25,6 +26,11 @@ function App() {
         {/* Phase 3 — Fantasy builder */}
         <Route path="/fantasy" element={
           <ProtectedRoute><Fantasy /></ProtectedRoute>
+        } />
+
+        {/* Phase 6 — Transferts */}
+        <Route path="/transfers" element={
+          <ProtectedRoute><Transfers /></ProtectedRoute>
         } />
 
         {/* Admin panel */}

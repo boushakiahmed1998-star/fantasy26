@@ -14,18 +14,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fantasy", tags=["fantasy"])
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────────
-
 def _get_or_create_default_league(sb) -> str:
-    """
-    Trouve ou crée la ligue générale.
-    Cherche d'abord une ligue existante, sinon en crée une si un admin existe.
-    """
     res = sb.table("leagues").select("id").limit(1).execute()
     if res.data:
         return str(res.data[0]["id"])
 
-    # Cherche un admin pour être owner
     admin = sb.table("users").select("id").eq("role", "admin").limit(1).execute()
     if not admin.data:
         raise HTTPException(
@@ -41,12 +34,10 @@ def _get_or_create_default_league(sb) -> str:
     return str(new_league.data[0]["id"])
 
 
-# ── Schémas ────────────────────────────────────────────────────────────────────
-
 class SaveTeamRequest(BaseModel):
     name: str = "Ma Sélection"
     formation: str = "4-3-3"
-    slots: Dict[str, Optional[str]]   # slotId → player_id (ou null)
+    slots: Dict[str, Optional[str]]
     coach_id: Optional[str] = None
     captain_id: Optional[str] = None
 
@@ -56,11 +47,8 @@ class AutoFillRequest(BaseModel):
     budget: int = 100
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
-
 @router.get("/my-team")
 async def get_my_team(user=Depends(get_current_user)):
-    """Charge l'équipe Fantasy de l'utilisateur connecté avec les données joueurs."""
     sb = get_supabase()
     res = sb.table("fantasy_teams").select("*").eq("user_id", user["sub"]).limit(1).execute()
 
@@ -68,9 +56,8 @@ async def get_my_team(user=Depends(get_current_user)):
         return {"team": None}
 
     team = res.data[0]
-    meta = team.get("players") or {}  # JSONB stockant formation + slots + captain
+    meta = team.get("players") or {}
 
-    # Résolution des joueurs → objets complets
     raw_slots: dict = meta.get("slots", {})
     player_ids = [v for v in raw_slots.values() if v]
     players_data: dict[str, dict] = {}
@@ -78,7 +65,6 @@ async def get_my_team(user=Depends(get_current_user)):
         pres = sb.table("players").select("*").in_("id", player_ids).execute()
         players_data = {str(p["id"]): p for p in pres.data}
 
-    # Résolution du coach
     coach_data = None
     if team.get("coach_id"):
         cres = (
@@ -102,13 +88,8 @@ async def get_my_team(user=Depends(get_current_user)):
 
 @router.post("/save")
 async def save_team(body: SaveTeamRequest, user=Depends(get_current_user)):
-    """
-    Valide et sauvegarde l'équipe Fantasy.
-    Upsert basé sur user_id (un seul team par user pour l'instant).
-    """
     sb = get_supabase()
 
-    # Validation métier uniquement si des joueurs sont présents
     player_ids = [v for v in body.slots.values() if v]
     budget_used = 0
 
@@ -170,7 +151,6 @@ async def save_team(body: SaveTeamRequest, user=Depends(get_current_user)):
         res = sb.table("fantasy_teams").insert(team_payload).execute()
 
     logger.info(f"Team saved for user {user['sub']} — budget_used={budget_used}")
-
     invalidate_user(user["sub"])
 
     return {
@@ -182,10 +162,6 @@ async def save_team(body: SaveTeamRequest, user=Depends(get_current_user)):
 
 @router.post("/auto-fill")
 async def auto_fill(body: AutoFillRequest, user=Depends(get_current_user)):
-    """
-    Génère une équipe de 15 joueurs + coach en respectant toutes les règles.
-    Retourne la suggestion sans la sauvegarder — l'utilisateur confirme ensuite.
-    """
     sb = get_supabase()
     all_players = sb.table("players").select("*").execute().data
     all_coaches = sb.table("coaches").select("*").execute().data
@@ -204,9 +180,14 @@ async def auto_fill(body: AutoFillRequest, user=Depends(get_current_user)):
         nationality_limit=3,
     )
 
-    if result["players_found"] < 11:
-    
-        return {
+    if result["players_found"] < 15:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Pas assez de joueurs disponibles : {result['players_found']}/{result['players_needed']}. "
+                   "Importez plus de joueurs via le panneau Admin.",
+        )
+
+    return {
         "success": True,
         "formation": result["formation"],
         "slots": result["slots"],
@@ -215,9 +196,3 @@ async def auto_fill(body: AutoFillRequest, user=Depends(get_current_user)):
         "players_found": result["players_found"],
         "players_needed": result["players_needed"],
     }
-
-        raise HTTPException(
-            status_code=400,
-            detail=f"Pas assez de joueurs disponibles : {result['players_found']}/{result['players_needed']}. "
-                   "Importez plus de joueurs via le panneau Admin.",
-        )

@@ -283,6 +283,8 @@ export default function Fantasy() {
   const [fetching, setFetching] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [autoFilling, setAutoFilling] = useState(false)
+  // Feedback quand on clique sur un joueur sans slot actif
+  const [quickFillMsg, setQuickFillMsg] = useState<string | null>(null)
 
   useEffect(() => {
     const token = localStorage.getItem('fb_token')
@@ -328,6 +330,43 @@ export default function Fantasy() {
   const slottedIds = new Set(Object.values(slots).filter(Boolean).map(p => p!.id))
   const activeSlotDef = activeSlot ? formSlots.find(s => s.slotId === activeSlot) : null
   const activePos = showCoachPicker ? null : (activeSlotDef?.position ?? null)
+
+  // ── Vérification si un joueur peut être sélectionné ─────────────────────────
+  const isPlayerUnavailable = (player: Player): boolean => {
+    // Déjà dans l'équipe
+    if (slottedIds.has(player.id)) return true
+    // Si slot actif : vérifier position, nationalité, budget
+    if (activeSlot) {
+      if (activeSlotDef && player.position !== activeSlotDef.position) return true
+      // Nationalité : on compte sans le joueur actuel dans ce slot
+      const currentInSlot = slots[activeSlot]
+      const countWithoutCurrent = (natCount[player.nationality] || 0) - (currentInSlot?.nationality === player.nationality ? 1 : 0)
+      if (countWithoutCurrent >= 3) return true
+      // Budget : soustraire l'ancien joueur du slot
+      const oldPrice = currentInSlot?.price ?? 0
+      if (budgetUsed - oldPrice + player.price > 100) return true
+      return false
+    }
+    // Sans slot actif : vérifier s'il existe un poste vide compatible
+    const hasEmptySlot = formSlots.some(s => s.position === player.position && !slots[s.slotId])
+    if (!hasEmptySlot) return true
+    // Nationalité
+    if ((natCount[player.nationality] || 0) >= 3) return true
+    // Budget (ajout dans un slot vide)
+    if (budgetUsed + player.price > 100) return true
+    return false
+  }
+
+  const isCoachUnavailable = (c: Coach): boolean => {
+    // Déjà sélectionné comme coach → peut re-sélectionner
+    if (coach?.id === c.id) return false
+    // Conflit de nationalité avec les joueurs
+    if ((natCount[c.nationality] || 0) > 0) return true
+    // Budget
+    const coachCostDelta = c.price - (coach?.price ?? 0)
+    if (budgetUsed + coachCostDelta > 100) return true
+    return false
+  }
 
   // ── Filtrage ────────────────────────────────────────────────────────────────
   const filteredPlayers = useMemo(() => {
@@ -385,10 +424,22 @@ export default function Fantasy() {
     setActiveSlot(activeSlot === slotId ? null : slotId)
   }
 
+  // ── FEATURE 1 : Clic sur joueur → remplit poste vide automatiquement ────────
   const handlePickPlayer = (player: Player) => {
-    if (!activeSlot) return
-    addPlayer(activeSlot, player)
-    closePicker()
+    // Si un slot est actif : comportement classique
+    if (activeSlot) {
+      addPlayer(activeSlot, player)
+      closePicker()
+      return
+    }
+    // Sinon : trouver le premier poste vide compatible
+    const emptySlot = formSlots.find(s => s.position === player.position && !slots[s.slotId])
+    if (emptySlot) {
+      addPlayer(emptySlot.slotId, player)
+      // Petit feedback visuel
+      setQuickFillMsg(`${player.name} → ${emptySlot.slotId.replace('_', ' ')}`)
+      setTimeout(() => setQuickFillMsg(null), 2000)
+    }
   }
 
   const handlePickCoach = (c: Coach) => {
@@ -476,7 +527,6 @@ export default function Fantasy() {
               {Object.keys(FORMATIONS).map(f => <option key={f} value={f}>{f}</option>)}
             </select>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 7 }}>
-              {/* Auto-fill : remplit tous les postes + entraîneur en 100M */}
               <button
                 onClick={handleAutoFill}
                 disabled={isAutoFilling}
@@ -505,7 +555,18 @@ export default function Fantasy() {
               fontSize: 12, color: '#8a9a8c', display: 'flex', alignItems: 'center', gap: 6,
             }}>
               <span>💡</span>
-              <span>Cliquez sur <strong style={{ color: '#c9a84c' }}>Remplissage auto</strong> pour générer une équipe complète (15 joueurs + entraîneur) en 100M, ou composez manuellement en cliquant sur les postes.</span>
+              <span>Cliquez sur <strong style={{ color: '#c9a84c' }}>Remplissage auto</strong> pour générer une équipe complète, ou cliquez directement sur un joueur dans la liste → il s'ajoutera automatiquement au premier poste vide correspondant.</span>
+            </div>
+          )}
+
+          {/* Quick fill feedback */}
+          {quickFillMsg && (
+            <div style={{
+              background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+              borderRadius: 7, padding: '6px 12px', marginBottom: 8,
+              fontSize: 12, color: '#34d399', display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              ✅ {quickFillMsg}
             </div>
           )}
 
@@ -703,8 +764,12 @@ export default function Fantasy() {
                 <button onClick={closePicker} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>✕</button>
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: '#6a7a6c', marginBottom: 9, textAlign: 'center' }}>
-                ← Clique sur un poste du terrain pour placer un joueur
+              <div style={{
+                fontSize: 12, color: '#6a7a6c', marginBottom: 9,
+                background: 'rgba(201,168,76,0.05)', border: '1px solid rgba(201,168,76,0.15)',
+                borderRadius: 6, padding: '6px 10px', textAlign: 'center',
+              }}>
+                💡 Cliquez sur un joueur pour le placer automatiquement · ou cliquez d'abord sur un poste du terrain
               </div>
             )}
 
@@ -825,27 +890,53 @@ export default function Fantasy() {
                 const c = item as Coach
                 const inTeam = !isC && slottedIds.has(p.id)
                 const isCurrentCoach = isC && coach?.id === c.id
+
+                // ── FEATURE 3 : calcul indisponibilité ────────────────────
+                const unavailable = isC ? isCoachUnavailable(c) : isPlayerUnavailable(p)
+
                 const posColor = !isC ? (POS_COLORS[p.position] || '#888') : '#8b5cf6'
-                const clickable = !!(activeSlot || showCoachPicker)
+
+                // Raison du blocage pour tooltip
+                let unavailReason = ''
+                if (!isC && unavailable) {
+                  if (slottedIds.has(p.id)) unavailReason = 'Déjà dans l\'équipe'
+                  else if ((natCount[p.nationality] || 0) >= 3) unavailReason = `Limite nationale atteinte (${p.nationality})`
+                  else if (!formSlots.some(s => s.position === p.position && !slots[s.slotId])) unavailReason = 'Tous les postes sont remplis'
+                  else unavailReason = 'Budget insuffisant'
+                }
+                if (isC && unavailable && !isCurrentCoach) {
+                  if ((natCount[c.nationality] || 0) > 0) unavailReason = `Conflit de nationalité (${c.nationality})`
+                  else unavailReason = 'Budget insuffisant'
+                }
 
                 return (
                   <div
                     key={item.id}
                     onClick={() => {
+                      if (unavailable && !isCurrentCoach) return
                       if (isC) handlePickCoach(c)
-                      else if (activeSlot) handlePickPlayer(p)
+                      else handlePickPlayer(p)
                     }}
+                    title={unavailReason || undefined}
                     style={{
                       display: 'flex', alignItems: 'center', gap: 10,
                       padding: '7px 14px',
-                      cursor: clickable ? 'pointer' : 'default',
+                      // ── FEATURE 3 : flou si indisponible ─────────────
+                      cursor: unavailable && !isCurrentCoach ? 'not-allowed' : 'pointer',
+                      filter: unavailable && !isCurrentCoach ? 'blur(1.5px)' : 'none',
+                      opacity: unavailable && !isCurrentCoach ? 0.38 : 1,
                       background: inTeam || isCurrentCoach ? 'rgba(201,168,76,0.06)' : 'transparent',
                       borderLeft: `3px solid ${inTeam || isCurrentCoach ? '#c9a84c' : 'transparent'}`,
-                      transition: 'background 0.12s',
-                      opacity: inTeam && !isC && !clickable ? 0.65 : 1,
+                      transition: 'all 0.12s',
+                      pointerEvents: unavailable && !isCurrentCoach ? 'none' : 'auto',
                     }}
-                    onMouseEnter={e => { if (clickable) (e.currentTarget as HTMLDivElement).style.background = `${posColor}14` }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = inTeam || isCurrentCoach ? 'rgba(201,168,76,0.06)' : 'transparent' }}
+                    onMouseEnter={e => {
+                      if (unavailable && !isCurrentCoach) return
+                      ;(e.currentTarget as HTMLDivElement).style.background = `${posColor}14`
+                    }}
+                    onMouseLeave={e => {
+                      ;(e.currentTarget as HTMLDivElement).style.background = inTeam || isCurrentCoach ? 'rgba(201,168,76,0.06)' : 'transparent'
+                    }}
                   >
                     <span style={{ fontSize: 20, flexShrink: 0 }}>{flag(isC ? c.nationality : p.nationality)}</span>
                     <div style={{ flex: 1, minWidth: 0 }}>

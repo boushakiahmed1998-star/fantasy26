@@ -15,11 +15,6 @@ class RuleViolation(Exception):
 
 
 def _parse_price(value) -> float | None:
-    """
-    Convertit une valeur de prix en float.
-    Accepte : 4.5, 4,5, "4,5 M", "7.5M", 8, etc.
-    Retourne None si invalide.
-    """
     if value is None:
         return None
     if isinstance(value, (int, float)):
@@ -38,24 +33,20 @@ def validate_import_batch(entries: list[dict]) -> dict:
     coaches = [e for e in entries if e.get("position") == "COACH"]
     warnings = []
 
-    # 1. Prix valides — accepte virgule et float (ex: 4,5 → 4.5)
     for p in players + coaches:
         price = _parse_price(p.get("price"))
         if price is None or price < 0:
             p["price"] = 5.0
             warnings.append(f"Prix manquant/invalide pour {p.get('name', '?')} → défaut 5M")
         elif price < 4:
-            # Prix minimum 4 selon les règles de génération
             p["price"] = 4.0
             warnings.append(f"Prix trop bas pour {p.get('name', '?')} → ajusté à 4M")
         elif price > 12:
-            # Prix max 12 selon les règles de génération
             p["price"] = 12.0
             warnings.append(f"Prix trop élevé pour {p.get('name', '?')} → plafonné à 12M")
         else:
             p["price"] = round(price, 1)
 
-    # 2. Nationalité présente
     for entry in players + coaches:
         if not entry.get("nationality"):
             raise RuleViolation(
@@ -63,7 +54,6 @@ def validate_import_batch(entries: list[dict]) -> dict:
                 f"Nationalité manquante pour {entry.get('name', '?')}",
             )
 
-    # 3. Poste valide
     valid_positions = {"GK", "DEF", "MID", "FWD", "COACH"}
     for entry in entries:
         if entry.get("position") not in valid_positions:
@@ -108,11 +98,11 @@ def validate_fantasy_team(
         coach = coaches_by_id.get(str(coach_id))
         if coach:
             budget_used += float(coach.get("price", 0))
-    if budget_used > 100:
+    if budget_used > 105:
         raise RuleViolation(
             "BUDGET_EXCEEDED",
-            f"Budget dépassé : {budget_used:.1f}M > 100M",
-            {"budget_used": budget_used, "limit": 100},
+            f"Budget dépassé : {budget_used:.1f}M > 105M",
+            {"budget_used": budget_used, "limit": 105},
         )
 
     nat_count: dict[str, int] = {}

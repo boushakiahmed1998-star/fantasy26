@@ -166,7 +166,7 @@ async def confirm_import(
 
         except Exception as e:
             logger.error(f"Error inserting player {p.name}: {e}")
-            errors.append(f"Joueur {p.name}: {str(e)[:100]}")
+            errors.append(f"Joueur {p.name}: {str(e)[:105]}")
 
     # ── Entraîneurs ───────────────────────────────────────────────────────────
     for c in body.coaches:
@@ -195,7 +195,7 @@ async def confirm_import(
 
         except Exception as e:
             logger.error(f"Error inserting coach {c.name}: {e}")
-            errors.append(f"Entraîneur {c.name}: {str(e)[:100]}")
+            errors.append(f"Entraîneur {c.name}: {str(e)[:105]}")
 
     invalidate_players()
 

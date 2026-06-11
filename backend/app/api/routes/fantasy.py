@@ -44,7 +44,7 @@ class SaveTeamRequest(BaseModel):
 
 class AutoFillRequest(BaseModel):
     formation: str = "4-3-3"
-    budget: int = 100
+    budget: int = 105
 
 
 @router.get("/my-team")

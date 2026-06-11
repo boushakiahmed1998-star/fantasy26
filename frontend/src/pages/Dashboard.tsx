@@ -555,7 +555,7 @@ export default function Dashboard() {
                 <span style={{ fontSize: 11, color: '#4a5a4c' }}>
                   {fantasyTeam?.budget_used?.toFixed(1) ?? 0}M utilisé
                 </span>
-                <span style={{ fontSize: 11, color: '#4a5a4c' }}>100M max</span>
+                <span style={{ fontSize: 11, color: '#4a5a4c' }}>105M max</span>
               </div>
             </div>
 

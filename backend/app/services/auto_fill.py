@@ -38,7 +38,7 @@ def auto_fill_team(
     formation: str,
     all_players: list[dict],
     all_coaches: list[dict],
-    budget: int = 100,
+    budget: int = 105,
     nationality_limit: int = 3,
 ) -> dict:
     required_slots = _build_slot_requirements(formation)

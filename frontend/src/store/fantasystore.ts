@@ -93,7 +93,6 @@ export function getFormationSlots(formation: string): { slotId: string; position
     }
   }
 
-  // Banc : 1 GK + 1 DEF + 1 MID + 1 FWD
   const bench = ['GK', 'DEF', 'MID', 'FWD'] as const
   bench.forEach((pos, i) => slots.push({ slotId: `BENCH_${i}`, position: pos }))
 
@@ -122,7 +121,6 @@ interface FantasyState {
   error: string | null
   savedMsg: string | null
 
-  // Actions
   setFormation: (f: string) => void
   setActiveSlot: (slotId: string | null) => void
   addPlayer: (slotId: string, player: Player) => void
@@ -132,12 +130,10 @@ interface FantasyState {
   setTeamName: (name: string) => void
   clearError: () => void
 
-  // API
   loadTeam: () => Promise<void>
   saveTeam: () => Promise<void>
   autoFill: (formation?: string) => Promise<void>
 
-  // Computed helpers
   getBudgetUsed: () => number
   getNationalityCount: () => Record<string, number>
   getPlayerCount: () => number
@@ -157,7 +153,6 @@ export const useFantasyStore = create<FantasyState>((set, get) => ({
 
   setFormation: (f) => {
     const { slots } = get()
-    // Conserver les joueurs dans les slots compatibles avec la nouvelle formation
     const newSlotDefs = getFormationSlots(f)
     const newSlots: Record<string, Player | null> = {}
     newSlotDefs.forEach(({ slotId }) => {
@@ -170,7 +165,6 @@ export const useFantasyStore = create<FantasyState>((set, get) => ({
 
   addPlayer: (slotId, player) => {
     const { slots } = get()
-    // Si le joueur est déjà dans un autre slot, le retirer
     const newSlots: Record<string, Player | null> = {}
     Object.entries(slots).forEach(([sid, p]) => {
       newSlots[sid] = p?.id === player.id ? null : p
@@ -214,8 +208,6 @@ export const useFantasyStore = create<FantasyState>((set, get) => ({
   },
 
   getPlayerCount: () => Object.values(get().slots).filter(Boolean).length,
-
-  // ── API calls ──────────────────────────────────────────────────────────────
 
   loadTeam: async () => {
     set({ loading: true, error: null })
@@ -281,7 +273,7 @@ export const useFantasyStore = create<FantasyState>((set, get) => ({
     set({ loading: true, error: null, savedMsg: null })
 
     try {
-      const { data } = await axios.post('/api/v1/fantasy/auto-fill', { formation, budget: 100 })
+      const { data } = await axios.post('/api/v1/fantasy/auto-fill', { formation, budget: 105 })
 
       const newSlots: Record<string, Player | null> = {}
       Object.entries(data.slots).forEach(([sid, p]) => { newSlots[sid] = p as Player })

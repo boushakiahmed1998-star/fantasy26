@@ -74,7 +74,7 @@ function checkBudget(
   const out = outPlayer?.price ?? 0
   const newBudget = currentBudgetUsed - out + inPlayer.price
   if (newBudget > 100) {
-    return `Budget dépassé : ${newBudget.toFixed(1)}M / 100M (vous avez ${(100 - currentBudgetUsed + out).toFixed(1)}M disponibles)`
+    return `Budget dépassé : ${newBudget.toFixed(1)}M / 105M (vous avez ${(100 - currentBudgetUsed + out).toFixed(1)}M disponibles)`
   }
   return null
 }
@@ -436,7 +436,7 @@ export default function Transfers() {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
               <span style={{ fontSize: 11, color: '#8a9a8c', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Budget</span>
               <span style={{ fontSize: 12, color: budgetOk ? '#c9a84c' : '#ef4444', fontWeight: 600 }}>
-                {budgetUsed.toFixed(1)}M / 100M
+                {budgetUsed.toFixed(1)}M / 105M
               </span>
             </div>
             <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden' }}>

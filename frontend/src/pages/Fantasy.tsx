@@ -398,7 +398,7 @@ export default function Fantasy() {
 
   // Violations
   const violations: string[] = []
-  if (budgetUsed > 100) violations.push(`Budget dépassé : ${budgetUsed.toFixed(1)} / 100M`)
+  if (budgetUsed > 100) violations.push(`Budget dépassé : ${budgetUsed.toFixed(1)} / 105M`)
   Object.entries(natCount).forEach(([nat, cnt]) => {
     if (cnt > 3) violations.push(`${nat} : ${cnt} joueurs (max 3)`)
   })
@@ -447,7 +447,7 @@ export default function Fantasy() {
     closePicker()
   }
 
-  // Auto-fill amélioré : remplit tout + coach avec 100M
+  // Auto-fill amélioré : remplit tout + coach avec 105M
   const handleAutoFill = async () => {
     setAutoFilling(true)
     try {
@@ -530,7 +530,7 @@ export default function Fantasy() {
               <button
                 onClick={handleAutoFill}
                 disabled={isAutoFilling}
-                title="Remplit automatiquement les 15 postes + l'entraîneur en respectant le budget de 100M"
+                title="Remplit automatiquement les 15 postes + l'entraîneur en respectant le budget de 105M"
                 style={{
                   ...btnGold,
                   opacity: isAutoFilling ? 0.5 : 1,
@@ -574,14 +574,14 @@ export default function Fantasy() {
           <div style={{ marginBottom: 10 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
               <span style={{ fontSize: 11, color: '#6a7a6c', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Budget</span>
-              <span style={{ fontSize: 12, fontWeight: 500, color: budgetUsed > 100 ? '#ef4444' : '#c9a84c' }}>
-                {budgetUsed.toFixed(1)}M <span style={{ color: '#6a7a6c' }}>/ 100M · {playerCount}/15</span>
+              <span style={{ fontSize: 12, fontWeight: 500, color: budgetUsed > 105 ? '#ef4444' : '#c9a84c' }}>
+                {budgetUsed.toFixed(1)}M <span style={{ color: '#6a7a6c' }}>/ 105M · {playerCount}/15</span>
               </span>
             </div>
             <div style={{ height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2, overflow: 'hidden' }}>
               <div style={{
                 height: '100%', width: `${budgetPct}%`,
-                background: budgetUsed > 100 ? '#ef4444' : budgetUsed > 85 ? '#f59e0b' : '#10b981',
+                background: budgetUsed > 105 ? '#ef4444' : budgetUsed > 85 ? '#f59e0b' : '#10b981',
                 borderRadius: 2, transition: 'width 0.4s ease',
               }} />
             </div>

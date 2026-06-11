@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import {
@@ -35,6 +35,16 @@ const FLAGS: Record<string, string> = {
 }
 
 function flag(nat: string) { return FLAGS[nat] || '🏳️' }
+
+// Prix par tranche
+const PRICE_RANGES = [
+  { label: 'Tous les prix', min: 0, max: 999 },
+  { label: '≤ 5M', min: 0, max: 5 },
+  { label: '5 – 7M', min: 5, max: 7 },
+  { label: '7 – 9M', min: 7, max: 9 },
+  { label: '9 – 11M', min: 9, max: 11 },
+  { label: '≥ 11M', min: 11, max: 999 },
+]
 
 // ── FieldSlot ──────────────────────────────────────────────────────────────────
 
@@ -132,6 +142,123 @@ function actionBtn(bg: string): React.CSSProperties {
   }
 }
 
+// ── FilterBar ──────────────────────────────────────────────────────────────────
+
+interface FilterBarProps {
+  filterPos: string
+  setFilterPos: (p: string) => void
+  filterNation: string
+  setFilterNation: (n: string) => void
+  filterPrice: number
+  setFilterPrice: (i: number) => void
+  search: string
+  setSearch: (s: string) => void
+  nations: string[]
+  activePos: string | null
+  showCoachPicker: boolean
+}
+
+function FilterBar({
+  filterPos, setFilterPos, filterNation, setFilterNation,
+  filterPrice, setFilterPrice, search, setSearch,
+  nations, activePos, showCoachPicker,
+}: FilterBarProps) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Search */}
+      <input
+        type="text"
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        placeholder={showCoachPicker ? '🔍 Rechercher un entraîneur...' : '🔍 Nom ou nation...'}
+        style={{
+          width: '100%', background: 'rgba(255,255,255,0.05)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 7, padding: '8px 12px',
+          color: '#f5f5f0', fontSize: 13, outline: 'none',
+          boxSizing: 'border-box',
+        }}
+      />
+
+      {!showCoachPicker && (
+        <>
+          {/* Position filter — masqué si slot actif (poste imposé) */}
+          {!activePos && (
+            <div style={{ display: 'flex', gap: 3 }}>
+              {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(pos => (
+                <button
+                  key={pos}
+                  onClick={() => setFilterPos(pos)}
+                  style={{
+                    flex: 1, borderRadius: 5, padding: '5px 2px',
+                    background: filterPos === pos ? `${POS_COLORS[pos] ?? '#c9a84c'}20` : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${filterPos === pos ? (POS_COLORS[pos] ?? '#c9a84c') + '55' : 'rgba(255,255,255,0.07)'}`,
+                    color: filterPos === pos ? (POS_COLORS[pos] ?? '#c9a84c') : '#6a7a6c',
+                    fontSize: 11, cursor: 'pointer', fontWeight: filterPos === pos ? 600 : 400,
+                  }}
+                >
+                  {pos}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Nation filter */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: '#6a7a6c', flexShrink: 0 }}>🌍</span>
+            <select
+              value={filterNation}
+              onChange={e => setFilterNation(e.target.value)}
+              style={{
+                flex: 1, background: '#0d2914',
+                border: filterNation !== 'ALL' ? '1px solid rgba(201,168,76,0.4)' : '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 6, padding: '5px 8px',
+                color: filterNation !== 'ALL' ? '#c9a84c' : '#8a9a8c',
+                fontSize: 12, outline: 'none', cursor: 'pointer',
+              }}
+            >
+              <option value="ALL">Toutes les nations</option>
+              {nations.map(n => (
+                <option key={n} value={n}>{flag(n)} {n}</option>
+              ))}
+            </select>
+            {filterNation !== 'ALL' && (
+              <button
+                onClick={() => setFilterNation('ALL')}
+                style={{
+                  background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.3)',
+                  borderRadius: 5, color: '#c9a84c', fontSize: 11,
+                  padding: '4px 7px', cursor: 'pointer', flexShrink: 0,
+                }}
+              >✕</button>
+            )}
+          </div>
+
+          {/* Price filter */}
+          <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+            {PRICE_RANGES.map((range, i) => (
+              <button
+                key={i}
+                onClick={() => setFilterPrice(i)}
+                style={{
+                  borderRadius: 5, padding: '4px 8px',
+                  background: filterPrice === i ? 'rgba(201,168,76,0.15)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${filterPrice === i ? 'rgba(201,168,76,0.45)' : 'rgba(255,255,255,0.07)'}`,
+                  color: filterPrice === i ? '#c9a84c' : '#6a7a6c',
+                  fontSize: 10, cursor: 'pointer',
+                  fontWeight: filterPrice === i ? 600 : 400,
+                }}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export default function Fantasy() {
@@ -149,26 +276,22 @@ export default function Fantasy() {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [allCoaches, setAllCoaches] = useState<Coach[]>([])
   const [filterPos, setFilterPos] = useState('ALL')
+  const [filterNation, setFilterNation] = useState('ALL')
+  const [filterPrice, setFilterPrice] = useState(0)
   const [search, setSearch] = useState('')
   const [showCoachPicker, setShowCoachPicker] = useState(false)
   const [fetching, setFetching] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [autoFilling, setAutoFilling] = useState(false)
 
   useEffect(() => {
     const token = localStorage.getItem('fb_token')
     if (!token) return
-
     loadTeam()
-
     setFetchError(null)
     Promise.all([
-      axios.get('/api/v1/players').then(r => {
-        const players = r.data.players || []
-        setAllPlayers(players)
-      }),
-      axios.get('/api/v1/coaches').then(r => {
-        setAllCoaches(r.data.coaches || [])
-      }),
+      axios.get('/api/v1/players').then(r => setAllPlayers(r.data.players || [])),
+      axios.get('/api/v1/coaches').then(r => setAllCoaches(r.data.coaches || [])),
     ]).catch(e => {
       const status = e.response?.status
       const detail = e.response?.data?.detail || e.message || 'Erreur inconnue'
@@ -176,12 +299,24 @@ export default function Fantasy() {
     }).finally(() => setFetching(false))
   }, [])
 
+  // Quand un slot devient actif → forcer le filtre de position
   useEffect(() => {
     if (activeSlot && !showCoachPicker) {
       const def = getFormationSlots(formation).find(s => s.slotId === activeSlot)
-      if (def) setFilterPos(def.position)
+      if (def) {
+        setFilterPos(def.position)
+        setFilterNation('ALL')
+        setFilterPrice(0)
+      }
     }
   }, [activeSlot])
+
+  // Nations disponibles (calculé une seule fois depuis allPlayers)
+  const availableNations = useMemo(() => {
+    const set = new Set<string>()
+    allPlayers.forEach(p => set.add(p.nationality))
+    return Array.from(set).sort()
+  }, [allPlayers])
 
   const budgetUsed = getBudgetUsed()
   const natCount = getNationalityCount()
@@ -194,6 +329,35 @@ export default function Fantasy() {
   const activeSlotDef = activeSlot ? formSlots.find(s => s.slotId === activeSlot) : null
   const activePos = showCoachPicker ? null : (activeSlotDef?.position ?? null)
 
+  // ── Filtrage ────────────────────────────────────────────────────────────────
+  const filteredPlayers = useMemo(() => {
+    if (showCoachPicker) return []
+    const priceRange = PRICE_RANGES[filterPrice]
+    return allPlayers.filter(p => {
+      if (activePos && p.position !== activePos) return false
+      if (!activePos && filterPos !== 'ALL' && p.position !== filterPos) return false
+      if (filterNation !== 'ALL' && p.nationality !== filterNation) return false
+      if (p.price < priceRange.min || p.price > priceRange.max) return false
+      if (search) {
+        const q = search.toLowerCase()
+        if (!p.name.toLowerCase().includes(q) && !p.nationality.toLowerCase().includes(q)) return false
+      }
+      return true
+    })
+  }, [showCoachPicker, allPlayers, activePos, filterPos, filterNation, filterPrice, search])
+
+  const filteredCoaches = useMemo(() => {
+    if (!showCoachPicker) return []
+    return allCoaches.filter(c =>
+      !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.nationality.toLowerCase().includes(search.toLowerCase())
+    )
+  }, [showCoachPicker, allCoaches, search])
+
+  const listItems = showCoachPicker ? filteredCoaches : filteredPlayers
+  const budgetPct = Math.min(100, (budgetUsed / 100) * 100)
+
+  // Violations
   const violations: string[] = []
   if (budgetUsed > 100) violations.push(`Budget dépassé : ${budgetUsed.toFixed(1)} / 100M`)
   Object.entries(natCount).forEach(([nat, cnt]) => {
@@ -202,26 +366,6 @@ export default function Fantasy() {
   if (coach && natCount[coach.nationality] > 0) {
     violations.push(`Coach ${coach.name} partage la nationalité de ses joueurs`)
   }
-
-  const filteredPlayers = showCoachPicker
-    ? []
-    : allPlayers.filter(p => {
-        if (activePos && p.position !== activePos) return false
-        if (!activePos && filterPos !== 'ALL' && p.position !== filterPos) return false
-        if (search && !p.name.toLowerCase().includes(search.toLowerCase()) &&
-            !p.nationality.toLowerCase().includes(search.toLowerCase())) return false
-        return true
-      })
-
-  const filteredCoaches = !showCoachPicker
-    ? []
-    : allCoaches.filter(c =>
-        !search || c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.nationality.toLowerCase().includes(search.toLowerCase())
-      )
-
-  const listItems = showCoachPicker ? filteredCoaches : filteredPlayers
-  const budgetPct = Math.min(100, (budgetUsed / 100) * 100)
 
   const openCoachPicker = () => {
     setActiveSlot(null)
@@ -251,6 +395,18 @@ export default function Fantasy() {
     setCoach(c)
     closePicker()
   }
+
+  // Auto-fill amélioré : remplit tout + coach avec 100M
+  const handleAutoFill = async () => {
+    setAutoFilling(true)
+    try {
+      await autoFill(formation)
+    } finally {
+      setAutoFilling(false)
+    }
+  }
+
+  const isAutoFilling = autoFilling || loading
 
   return (
     <div style={{ minHeight: '100vh', background: '#08190c', display: 'flex', flexDirection: 'column', fontFamily: "'DM Sans', sans-serif", color: '#f5f5f0' }}>
@@ -320,14 +476,38 @@ export default function Fantasy() {
               {Object.keys(FORMATIONS).map(f => <option key={f} value={f}>{f}</option>)}
             </select>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 7 }}>
-              <button onClick={() => autoFill(formation)} disabled={loading} style={{ ...btnGold, opacity: loading ? 0.5 : 1, fontSize: 12, padding: '7px 13px' }}>
-                {loading ? '⟳' : '🤖 Auto-fill'}
+              {/* Auto-fill : remplit tous les postes + entraîneur en 100M */}
+              <button
+                onClick={handleAutoFill}
+                disabled={isAutoFilling}
+                title="Remplit automatiquement les 15 postes + l'entraîneur en respectant le budget de 100M"
+                style={{
+                  ...btnGold,
+                  opacity: isAutoFilling ? 0.5 : 1,
+                  fontSize: 12, padding: '7px 13px',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}
+              >
+                {isAutoFilling ? '⟳' : '🤖'}
+                {isAutoFilling ? 'Remplissage...' : 'Remplissage auto'}
               </button>
               <button onClick={saveTeam} disabled={saving} style={{ ...btnSave, opacity: saving ? 0.5 : 1, fontSize: 12, padding: '7px 13px' }}>
                 {saving ? '⟳ ...' : '💾 Sauvegarder'}
               </button>
             </div>
           </div>
+
+          {/* Hint auto-fill */}
+          {playerCount === 0 && !isAutoFilling && (
+            <div style={{
+              background: 'rgba(201,168,76,0.06)', border: '1px solid rgba(201,168,76,0.2)',
+              borderRadius: 7, padding: '7px 12px', marginBottom: 8,
+              fontSize: 12, color: '#8a9a8c', display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <span>💡</span>
+              <span>Cliquez sur <strong style={{ color: '#c9a84c' }}>Remplissage auto</strong> pour générer une équipe complète (15 joueurs + entraîneur) en 100M, ou composez manuellement en cliquant sur les postes.</span>
+            </div>
+          )}
 
           {/* Budget bar */}
           <div style={{ marginBottom: 10 }}>
@@ -528,40 +708,56 @@ export default function Fantasy() {
               </div>
             )}
 
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder={showCoachPicker ? '🔍 Rechercher un entraîneur...' : '🔍 Rechercher (nom, nation)...'}
-              style={{
-                width: '100%', background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 7, padding: '8px 12px',
-                color: '#f5f5f0', fontSize: 13, outline: 'none',
-                boxSizing: 'border-box', marginBottom: 8,
-              }}
+            {/* Filtres */}
+            <FilterBar
+              filterPos={filterPos}
+              setFilterPos={setFilterPos}
+              filterNation={filterNation}
+              setFilterNation={setFilterNation}
+              filterPrice={filterPrice}
+              setFilterPrice={setFilterPrice}
+              search={search}
+              setSearch={setSearch}
+              nations={availableNations}
+              activePos={activePos}
+              showCoachPicker={showCoachPicker}
             />
 
-            {!activeSlot && !showCoachPicker && (
-              <div style={{ display: 'flex', gap: 4 }}>
-                {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(pos => (
-                  <button
-                    key={pos}
-                    onClick={() => setFilterPos(pos)}
-                    style={{
-                      flex: 1, borderRadius: 5, padding: '5px 2px',
-                      background: filterPos === pos ? `${POS_COLORS[pos] ?? '#c9a84c'}20` : 'rgba(255,255,255,0.03)',
-                      border: `1px solid ${filterPos === pos ? (POS_COLORS[pos] ?? '#c9a84c') + '55' : 'rgba(255,255,255,0.07)'}`,
-                      color: filterPos === pos ? (POS_COLORS[pos] ?? '#c9a84c') : '#6a7a6c',
-                      fontSize: 11, cursor: 'pointer', fontWeight: filterPos === pos ? 600 : 400,
-                    }}
-                  >
-                    {pos}
-                  </button>
-                ))}
+            {/* Résumé filtres actifs */}
+            {!showCoachPicker && (filterNation !== 'ALL' || filterPrice !== 0 || search) && (
+              <div style={{ marginTop: 6, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, color: '#4a5a4c' }}>Filtres actifs :</span>
+                {filterNation !== 'ALL' && (
+                  <span style={activeFilterChip}>🌍 {filterNation}</span>
+                )}
+                {filterPrice !== 0 && (
+                  <span style={activeFilterChip}>💰 {PRICE_RANGES[filterPrice].label}</span>
+                )}
+                {search && (
+                  <span style={activeFilterChip}>🔍 "{search}"</span>
+                )}
+                <button
+                  onClick={() => { setFilterNation('ALL'); setFilterPrice(0); setSearch('') }}
+                  style={{ fontSize: 10, color: '#8a9a8c', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                >
+                  Tout effacer
+                </button>
               </div>
             )}
           </div>
+
+          {/* Compteur résultats */}
+          {!showCoachPicker && !fetching && (
+            <div style={{
+              padding: '5px 14px',
+              fontSize: 11, color: '#4a5a4c',
+              borderBottom: '1px solid rgba(255,255,255,0.04)',
+              background: 'rgba(0,0,0,0.15)',
+              flexShrink: 0,
+            }}>
+              {listItems.length} joueur{listItems.length > 1 ? 's' : ''} · {allPlayers.length} au total
+            </div>
+          )}
 
           {/* List */}
           <div style={{ flex: 1, overflowY: 'auto' }}>
@@ -609,7 +805,18 @@ export default function Fantasy() {
                       </button>
                     </div>
                   )
-                  : 'Aucun résultat pour cette recherche.'}
+                  : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+                      <span style={{ fontSize: 32 }}>🔍</span>
+                      <span>Aucun résultat pour ces filtres</span>
+                      <button
+                        onClick={() => { setFilterNation('ALL'); setFilterPrice(0); setSearch('') }}
+                        style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#8a9a8c', padding: '6px 14px', cursor: 'pointer', fontSize: 12 }}
+                      >
+                        Réinitialiser les filtres
+                      </button>
+                    </div>
+                  )}
               </div>
             ) : (
               listItems.map(item => {
@@ -648,7 +855,7 @@ export default function Fantasy() {
                         {isCurrentCoach && <span style={{ marginLeft: 6, fontSize: 10, color: '#a78bfa' }}>✓ Coach actuel</span>}
                       </div>
                       <div style={{ fontSize: 11, color: '#6a7a6c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {isC ? c.nationality : `${p.nationality}`}
+                        {isC ? c.nationality : p.nationality}
                       </div>
                     </div>
                     {!isC && (
@@ -673,14 +880,24 @@ export default function Fantasy() {
               display: 'flex', flexWrap: 'wrap', gap: 5, flexShrink: 0,
             }}>
               {Object.entries(natCount).sort((a, b) => b[1] - a[1]).map(([nat, cnt]) => (
-                <span key={nat} style={{
-                  fontSize: 10, padding: '2px 7px', borderRadius: 4,
-                  background: cnt >= 3 ? 'rgba(245,158,11,0.12)' : 'rgba(255,255,255,0.04)',
-                  border: `1px solid ${cnt >= 3 ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.07)'}`,
-                  color: cnt >= 3 ? '#f59e0b' : '#6a7a6c',
-                }}>
+                <button
+                  key={nat}
+                  onClick={() => setFilterNation(filterNation === nat ? 'ALL' : nat)}
+                  title={`Filtrer par ${nat}`}
+                  style={{
+                    fontSize: 10, padding: '2px 7px', borderRadius: 4,
+                    background: filterNation === nat
+                      ? 'rgba(201,168,76,0.2)'
+                      : cnt >= 3 ? 'rgba(245,158,11,0.12)' : 'rgba(255,255,255,0.04)',
+                    border: `1px solid ${filterNation === nat
+                      ? 'rgba(201,168,76,0.5)'
+                      : cnt >= 3 ? 'rgba(245,158,11,0.4)' : 'rgba(255,255,255,0.07)'}`,
+                    color: filterNation === nat ? '#c9a84c' : cnt >= 3 ? '#f59e0b' : '#6a7a6c',
+                    cursor: 'pointer',
+                  }}
+                >
                   {flag(nat)} {nat.length > 8 ? nat.substring(0, 7) + '.' : nat} {cnt}/3
-                </span>
+                </button>
               ))}
             </div>
           )}
@@ -720,4 +937,11 @@ function msgBox(color: string): React.CSSProperties {
     fontSize: 13, color,
     marginBottom: 8,
   }
+}
+
+const activeFilterChip: React.CSSProperties = {
+  fontSize: 10, padding: '2px 7px', borderRadius: 4,
+  background: 'rgba(201,168,76,0.12)',
+  border: '1px solid rgba(201,168,76,0.3)',
+  color: '#c9a84c',
 }

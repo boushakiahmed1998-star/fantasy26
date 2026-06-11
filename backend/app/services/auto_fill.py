@@ -100,14 +100,24 @@ def auto_fill_team(
             break
 
     # Sélection du coach (nationalité absente des joueurs, budget restant)
-    player_nationalities = {p.get("nationality", "") for p in selected_slots.values()}
-    chosen_coach = None
+    # Sélection du coach (nationalité absente des joueurs, budget restant)
+player_nationalities = {p.get("nationality", "") for p in selected_slots.values()}
+chosen_coach = None
 
-    coaches_sorted = sorted(all_coaches, key=lambda c: -(c.get("price") or 0))
+coaches_sorted = sorted(all_coaches, key=lambda c: -(c.get("price") or 0))
+for coach in coaches_sorted:
+    coach_nat = coach.get("nationality", "")
+    coach_price = coach.get("price", 0) or 0
+    if coach_nat not in player_nationalities and coach_price <= remaining_budget:
+        chosen_coach = coach
+        remaining_budget -= coach_price
+        break
+
+# Fallback : si aucun coach compatible, choisir n'importe lequel dans le budget
+if not chosen_coach:
     for coach in coaches_sorted:
-        coach_nat = coach.get("nationality", "")
         coach_price = coach.get("price", 0) or 0
-        if coach_nat not in player_nationalities and coach_price <= remaining_budget:
+        if coach_price <= remaining_budget:
             chosen_coach = coach
             remaining_budget -= coach_price
             break

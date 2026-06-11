@@ -205,6 +205,17 @@ async def auto_fill(body: AutoFillRequest, user=Depends(get_current_user)):
     )
 
     if result["players_found"] < 11:
+    
+        return {
+        "success": True,
+        "formation": result["formation"],
+        "slots": result["slots"],
+        "coach": result["coach"],
+        "budget_used": result["budget_used"],
+        "players_found": result["players_found"],
+        "players_needed": result["players_needed"],
+    }
+
         raise HTTPException(
             status_code=400,
             detail=f"Pas assez de joueurs disponibles : {result['players_found']}/{result['players_needed']}. "
